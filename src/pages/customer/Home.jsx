@@ -84,7 +84,9 @@ export default function Home() {
       <footer className="bg-gray-900 text-gray-400 py-16 text-sm">
          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12 border-b border-gray-800 pb-12">
             <div>
-               <h4 className="text-white font-bold text-xl mb-6 flex items-center"><Snowflake className="mr-2 h-6 w-6 text-cyan-500"/> Ice Flow System</h4>
+               <h4 className="text-white font-bold text-xl mb-6 flex items-center">
+                  <img src="/logo-white.png" alt="Bella Erin Tube Ice Logo" className="mr-3 h-30 w-auto" />
+               </h4>
                <p className="text-base">The clean, healthy ice you just can't get from your freezer at home.</p>
             </div>
             <div>
@@ -111,7 +113,7 @@ export default function Home() {
             </div>
          </div>
          <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-            <p>© 2026 Ice Flow System. All rights reserved.</p>
+            <p>© 2026 Bella Erin Tube Ice. All rights reserved.</p>
          </div>
       </footer>
     </div>

@@ -23,9 +23,12 @@ function Layout() {
             
             {/* Logo */}
             <div className="flex items-center">
-              <Link to="/" className={`flex items-center gap-2 text-2xl font-black tracking-tight hover:opacity-80 transition ${isHome ? 'text-white' : 'text-blue-900'}`}>
-                <Snowflake className="h-8 w-8 text-cyan-400" />
-                ICE FLOW
+              <Link to="/" className="flex items-center hover:opacity-80 transition">
+                <img 
+                  src={isHome ? '/logo-white.png' : '/logo.png'} 
+                  alt="Bella Erin Tube Ice Logo" 
+                  className="h-20 w-auto" 
+                />
               </Link>
             </div>
 
