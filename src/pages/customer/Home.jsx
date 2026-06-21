@@ -4,28 +4,45 @@ import { ArrowRight, Smartphone, Truck, ShieldCheck, Droplet, Snowflake } from '
 export default function Home() {
   return (
     <div className="w-full">
-      {/* HERO SECTION */}
-      <div className="relative bg-blue-900 text-white overflow-hidden">
-         <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-700 opacity-95"></div>
-         <div className="relative max-w-7xl mx-auto px-6 py-24 lg:py-32 flex flex-col items-start">
-            <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
-               The Leading <span className="text-cyan-400">Packaged Ice</span> Supplier
+      
+      {/* HERO SECTION WITH VIDEO BACKGROUND */}
+      <div className="relative min-h-[90vh] flex items-center overflow-hidden">
+         
+         {/* The Background Video */}
+         <video 
+            autoPlay 
+            loop 
+            muted 
+            playsInline 
+            className="absolute inset-0 w-full h-full object-cover"
+         >
+            {/* Placeholder Free Stock Video of Water/Ice */}
+            <source src="/hero-video.mp4" type="video/mp4" />
+         </video>
+
+         {/* Dark overlay so the white text is readable over the bright video */}
+         <div className="absolute inset-0 bg-blue-950/60"></div>
+
+         {/* Hero Content */}
+         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32 pb-24 flex flex-col items-start w-full mt-10">
+            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 text-white drop-shadow-lg">
+               The Leading <span className="text-cyan-400">Packaged Ice</span><br/>Supplier
             </h1>
-            <p className="text-xl md:text-2xl text-blue-100 max-w-2xl mb-10 leading-relaxed">
+            <p className="text-xl md:text-2xl text-blue-50 max-w-2xl mb-10 leading-relaxed drop-shadow-md">
                There is more to great ice than just freezing water. We deliver premium, purified ice with real-time inventory tracking to keep your business running smoothly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-               <Link to="/order" className="bg-cyan-400 hover:bg-cyan-300 text-blue-950 font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-lg">
+               <Link to="/order" className="bg-cyan-500 hover:bg-cyan-400 text-blue-950 font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-xl">
                   Order Ice Now <ArrowRight className="ml-2 h-5 w-5" />
                </Link>
-               <a href="#consumer" className="bg-transparent border-2 border-white hover:bg-white hover:text-blue-900 text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 text-center">
+               <a href="#consumer" className="backdrop-blur-sm bg-white/10 border-2 border-white/50 hover:bg-white hover:text-blue-900 text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 text-center">
                   Learn More
                </a>
             </div>
          </div>
       </div>
 
-      {/* TECH & QUALITY SECTION (Inspired by Home City Ice) */}
+      {/* TECH & QUALITY SECTION */}
       <div id="consumer" className="py-24 bg-white">
          <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
             <div>
