@@ -3,6 +3,7 @@ import { Snowflake } from 'lucide-react';
 import Home from './pages/customer/Home';
 import CustomerPortal from './pages/customer/Portal';
 import AdminDashboard from './pages/admin/Dashboard';
+import Login from './pages/customer/Login';
 
 // We create a Layout component so we can use the useLocation hook
 function Layout() {
@@ -35,8 +36,8 @@ function Layout() {
             {/* Links */}
             <div className="flex items-center space-x-8">
               <Link to="/" className={`font-semibold transition ${isHome ? 'text-gray-200 hover:text-white' : 'text-gray-600 hover:text-blue-600'}`}>Home</Link>
-              <Link to="/admin" className={`font-semibold transition ${isHome ? 'text-gray-200 hover:text-white' : 'text-gray-600 hover:text-blue-600'}`}>Admin</Link>
-              <Link to="/order" className="bg-cyan-500 hover:bg-cyan-400 text-blue-950 px-6 py-3 rounded-full font-bold transition shadow-lg">
+              <Link to="/login" className={`font-semibold transition ${isHome ? 'text-gray-200 hover:text-white' : 'text-gray-600 hover:text-blue-600'}`}>Login</Link>
+              <Link to="/order" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white px-6 py-3 rounded-[28px_8px_28px_8px] font-bold transition shadow-lg">
                 Order Ice
               </Link>
             </div>
@@ -50,6 +51,7 @@ function Layout() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/order" element={<CustomerPortal />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
       </main>

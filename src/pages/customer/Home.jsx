@@ -26,13 +26,13 @@ export default function Home() {
          {/* Hero Content */}
          <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32 pb-24 flex flex-col items-start w-full mt-10">
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 text-white drop-shadow-lg">
-               The Leading <span className="text-cyan-400">Packaged Ice</span><br/>Supplier
+               The Leading <span className="text-[#4091c9]">Packaged Ice</span><br/>Supplier
             </h1>
             <p className="text-xl md:text-2xl text-blue-50 max-w-2xl mb-10 leading-relaxed drop-shadow-md">
                There is more to great ice than just freezing water. We deliver premium, purified ice with real-time inventory tracking to keep your business running smoothly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-               <Link to="/order" className="bg-cyan-500 hover:bg-cyan-400 text-blue-950 font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-xl">
+               <Link to="/order" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white font-bold py-4 px-8 rounded-[28px_8px_28px_8px] text-lg transition duration-300 flex items-center justify-center shadow-xl">
                   Order Ice Now <ArrowRight className="ml-2 h-5 w-5" />
                </Link>
                <a href="#consumer" className="backdrop-blur-sm bg-white/10 border-2 border-white/50 hover:bg-white hover:text-blue-900 text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 text-center">

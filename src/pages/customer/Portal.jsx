@@ -135,8 +135,8 @@ export default function CustomerPortal() {
               type="submit" 
               disabled={orderStatus !== 'idle' || availableSacks === 0}
               className={`w-full flex justify-center items-center p-4 rounded-xl font-bold text-lg transition-all duration-300 shadow-md
-                ${orderStatus === 'idle' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
-                ${orderStatus === 'processing' ? 'bg-blue-400 text-white cursor-not-allowed' : ''}
+                ${orderStatus === 'idle' ? 'bg-[#4091c9] hover:bg-[#2d75aa] text-white' : ''}
+                ${orderStatus === 'processing' ? 'bg-[#7aa8d1] text-white cursor-not-allowed' : ''}
                 ${orderStatus === 'success' ? 'bg-green-500 text-white' : ''}
                 ${availableSacks === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : ''}
               `}
