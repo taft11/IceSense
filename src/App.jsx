@@ -10,6 +10,7 @@ function Layout() {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
+  const isPortal = location.pathname === '/portal';
 
   return (
     <div className="min-h-screen flex flex-col font-sans relative">
@@ -19,7 +20,7 @@ function Layout() {
         If on Home -> Transparent, floating on top of video. 
         If on other pages -> Solid white, sticky.
       */}
-      {!isLogin && (
+      {!isLogin && !isPortal && (
         <nav className={`w-full z-50 transition-all duration-300 ${isHome ? 'absolute top-0 bg-transparent' : 'sticky top-0 bg-white border-b border-gray-200 shadow-sm'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-24">
@@ -38,7 +39,7 @@ function Layout() {
               {/* Links */}
               <div className="flex items-center space-x-8">
                 <Link to="/login" className={`font-semibold transition ${isHome ? 'text-gray-200 hover:text-white' : 'text-gray-600 hover:text-blue-600'}`}>Login</Link>
-                <Link to="/order" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white px-6 py-3 rounded-[28px_8px_28px_8px] font-bold transition shadow-lg">
+                <Link to="/login" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white px-6 py-3 rounded-[28px_8px_28px_8px] font-bold transition shadow-lg">
                   Order Ice
                 </Link>
               </div>
@@ -52,7 +53,7 @@ function Layout() {
       <main className={`flex-grow ${isHome ? '' : 'bg-gray-50 pb-10'}`}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/order" element={<CustomerPortal />} />
+          <Route path="/portal" element={<CustomerPortal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Routes>

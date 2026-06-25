@@ -30,7 +30,7 @@ export default function Login() {
       if (isLogin) {
         // LOGIN LOGIC
         await signInWithEmailAndPassword(auth, email, password);
-        navigate('/admin');
+        navigate('/portal');
       } else {
         // SIGN UP LOGIC
         if (password !== confirmPassword) {
@@ -42,7 +42,7 @@ export default function Login() {
         // Create user in Firebase
         await createUserWithEmailAndPassword(auth, email, password);
         // You could also save the user's `name` to a Firestore/Realtime DB profile here
-        navigate('/admin');
+        navigate('/portal');
       }
     } catch (err) {
       // Clean up Firebase error messages to be user-friendly

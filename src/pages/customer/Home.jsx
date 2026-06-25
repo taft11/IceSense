@@ -32,7 +32,7 @@ export default function Home() {
                There is more to great ice than just freezing water. We deliver premium, purified ice with real-time inventory tracking to keep your business running smoothly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-               <Link to="/order" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-xl">
+               <Link to="/portal" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-xl">
                   Order Ice Now <ArrowRight className="ml-2 h-5 w-5" />
                </Link>
                <a href="#consumer" className="backdrop-blur-sm bg-white/10 border-2 border-white/50 hover:bg-white hover:text-blue-900 text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 text-center">
@@ -136,7 +136,7 @@ export default function Home() {
             <div>
                <h4 className="text-white font-bold mb-6 tracking-wider">PORTALS</h4>
                <ul className="space-y-3 text-base">
-                  <li><Link to="/order" className="hover:text-[#4091c9] transition">Customer Portal</Link></li>
+                  <li><Link to="/portal" className="hover:text-[#4091c9] transition">Customer Portal</Link></li>
                   <li><Link to="/login" className="hover:text-[#4091c9] transition">Employee Dashboard</Link></li>
                </ul>
             </div>
