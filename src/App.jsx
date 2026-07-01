@@ -13,7 +13,7 @@ function Layout() {
   const isPortal = location.pathname === '/portal';
 
   return (
-    <div className="min-h-screen flex flex-col font-sans relative">
+    <div className="min-h-screen flex flex-col font-sans relative overflow-x-hidden">
       
       {/*
         Dynamic Navigation Bar: 
@@ -50,7 +50,7 @@ function Layout() {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-grow ${isHome ? '' : 'bg-gray-50 pb-10'}`}>
+      <main className={`flex-grow ${isHome ? '' : 'bg-gray-50'}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/portal" element={<CustomerPortal />} />
