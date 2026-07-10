@@ -137,7 +137,7 @@ export default function Home() {
                <h4 className="text-white font-bold mb-6 tracking-wider">PORTALS</h4>
                <ul className="space-y-3 text-base">
                   <li><Link to="/portal" className="hover:text-[#4091c9] transition">Customer Portal</Link></li>
-                  <li><Link to="/login" className="hover:text-[#4091c9] transition">Employee Dashboard</Link></li>
+                  <li><Link to="/admin-login" className="hover:text-[#4091c9] transition">Employee Dashboard</Link></li>
                </ul>
             </div>
          </div>
