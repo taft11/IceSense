@@ -1,0 +1,4 @@
+- [ ] Refine `BellaErinLogo` geometry in `AppBranding.kt`
+- [ ] Update `LoginScreen.kt` to use the large refined vector logo
+- [ ] Update `DeliveryListScreen.kt` to use the refined vector logo
+- [ ] Verify UI appearance
