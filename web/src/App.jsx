@@ -13,6 +13,7 @@ function Layout() {
   const isLogin = location.pathname === '/login';
   const isAdminLogin = location.pathname === '/admin-login';
   const isPortal = location.pathname === '/portal';
+  const isAdmin = location.pathname === '/admin';
 
   return (
     <div className="min-h-screen flex flex-col font-sans relative overflow-x-hidden">
@@ -22,7 +23,7 @@ function Layout() {
         If on Home -> Transparent, floating on top of video. 
         If on other pages -> Solid white, sticky.
       */}
-      {!isLogin && !isAdminLogin && !isPortal && (
+      {!isLogin && !isAdminLogin && !isPortal && !isAdmin && (
         <nav className={`w-full z-50 transition-all duration-300 ${isHome ? 'absolute top-0 bg-transparent' : 'sticky top-0 bg-white border-b border-gray-200 shadow-sm'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-24">
