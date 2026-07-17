@@ -319,7 +319,7 @@ export default function CustomerPortal() {
                   <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">
                     Place Your Order
                   </h1>
-                  <p className="text-blue-100 text-lg">Select a product below to check live availability and place an order.</p>
+                  <p className="text-blue-100 text-lg">Select a product below to place an order.</p>
                 </div>
               </div>
 
@@ -359,22 +359,7 @@ export default function CustomerPortal() {
                 <div className="space-y-6">
                   <h2 className="text-xl font-bold text-gray-800">2. Review Details</h2>
 
-                  {/* Live Stock Indicator */}
-                  <div className={`p-6 rounded-2xl border shadow-sm flex items-start space-x-4
-                    ${activeStock > 20 ? 'bg-green-50 border-green-200' : activeStock > 0 ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
-                    {activeStock > 20 ? (
-                      <CheckCircle className="h-8 w-8 text-green-600 mt-1" />
-                    ) : (
-                      <Info className={`h-8 w-8 mt-1 ${activeStock > 0 ? 'text-orange-600' : 'text-red-600'}`} />
-                    )}
-                    <div>
-                      <h3 className="text-gray-800 font-bold text-lg">Live Availability</h3>
-                      <p className={`text-3xl font-black mt-1 ${activeStock > 20 ? 'text-green-700' : activeStock > 0 ? 'text-orange-700' : 'text-red-700'}`}>
-                        {activeStock} {activeStock === 1 ? 'Unit' : 'Units'}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">Updates instantly from our freezer load cells.</p>
-                    </div>
-                  </div>
+                  
 
                   {/* Product Description */}
                   <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
