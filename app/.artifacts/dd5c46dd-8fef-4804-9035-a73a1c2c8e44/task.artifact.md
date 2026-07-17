@@ -1,0 +1,7 @@
+- `[x]` Update `DeliveryListScreen` to support Tabs
+    - `[x]` Add `selectedTabIndex` state
+    - `[x]` Implement `TabRow` for "To Deliver" and "Delivered"
+    - `[x]` Filter deliveries list based on tab index
+    - `[x]` Add empty state UI for both tabs
+- `[x]` Verify confirmation flow moves items between tabs
+- `[x]` Create Walkthrough
