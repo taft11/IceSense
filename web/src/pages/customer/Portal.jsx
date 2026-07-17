@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
 import { ShoppingCart, CheckCircle, Plus, Minus, Snowflake, Info, Package, LogOut, Menu, Clock3, ReceiptText } from 'lucide-react';
 
@@ -36,6 +36,16 @@ export default function CustomerPortal() {
   const [orderStatus, setOrderStatus] = useState('idle'); // 'idle', 'processing', 'success'
   const [loggingOut, setLoggingOut] = useState(false);
   const [activeView, setActiveView] = useState('order');
+  const [accountInfo, setAccountInfo] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    contactNumber: '',
+    address: '',
+  });
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountMessage, setAccountMessage] = useState('');
+  const [accountError, setAccountError] = useState('');
 
   // Get the details of the currently selected product
   const activeProduct = PRODUCTS.find((p) => p.id === selectedProductId);
@@ -54,6 +64,33 @@ export default function CustomerPortal() {
   useEffect(() => {
     let unsubscribeOrders = null;
 
+    const loadUserAccount = async (userId) => {
+      try {
+        const userDoc = doc(db, 'users', userId);
+        const snapshot = await getDoc(userDoc);
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setAccountInfo({
+            firstName: data.firstName || '',
+            middleName: data.middleName || '',
+            lastName: data.lastName || '',
+            contactNumber: data.contactNumber || '',
+            address: data.address || '',
+          });
+        } else {
+          setAccountInfo({
+            firstName: '',
+            middleName: '',
+            lastName: '',
+            contactNumber: '',
+            address: '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load account info', error);
+      }
+    };
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (unsubscribeOrders) {
         unsubscribeOrders();
@@ -66,6 +103,8 @@ export default function CustomerPortal() {
         setOrdersError('');
         return;
       }
+
+      loadUserAccount(user.uid);
 
       setOrdersLoading(true);
       const ordersRef = collection(db, 'orders');
@@ -247,6 +286,64 @@ export default function CustomerPortal() {
         setOrderStatus('idle');
       }
     }, 1500);
+  };
+
+  const handleAccountChange = (field, value) => {
+    setAccountInfo((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validateAccountInfo = () => {
+    if (!accountInfo.firstName.trim()) return 'First name is required.';
+    if (!accountInfo.lastName.trim()) return 'Last name is required.';
+
+    const phone = accountInfo.contactNumber.trim();
+    if (!phone) return 'Contact number is required.';
+    const phoneRegex = /^(?:\+63|0)9\d{9}$/;
+    if (!phoneRegex.test(phone)) return 'Enter a valid Philippine mobile number, e.g. 09171234567 or +639171234567.';
+
+    if (!accountInfo.address.trim() || accountInfo.address.trim().length < 10) {
+      return 'Enter a complete delivery address with street, barangay, and city.';
+    }
+
+    return '';
+  };
+
+  const handleAccountSave = async (e) => {
+    e.preventDefault();
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setAccountError('Please sign in before saving account details.');
+      setAccountMessage('');
+      return;
+    }
+
+    const validationError = validateAccountInfo();
+    if (validationError) {
+      setAccountError(validationError);
+      setAccountMessage('');
+      return;
+    }
+
+    setAccountSaving(true);
+    setAccountMessage('');
+    setAccountError('');
+
+    try {
+      const userDoc = doc(db, 'users', currentUser.uid);
+      await setDoc(userDoc, {
+        ...accountInfo,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      setAccountMessage('Account information saved successfully.');
+      setAccountError('');
+    } catch (error) {
+      console.error('Failed to save account info', error);
+      setAccountError('Unable to save account information. Please try again.');
+      setAccountMessage('');
+    } finally {
+      setAccountSaving(false);
+    }
   };
 
   return (
@@ -534,8 +631,98 @@ export default function CustomerPortal() {
             </div>
           ) : (
             <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">My Account</h2>
-              <p className="text-gray-600">Manage your account and delivery preferences here.</p>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">My Account</h2>
+                  <p className="text-gray-600">Fill in your delivery and contact details below.</p>
+                </div>
+                <div className="rounded-full bg-blue-50 p-3 text-[#4091c9]">
+                  <Info className="h-6 w-6" />
+                </div>
+              </div>
+
+              {accountError && (
+                <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  {accountError}
+                </div>
+              )}
+              {accountMessage && (
+                <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+                  {accountMessage}
+                </div>
+              )}
+
+              <form onSubmit={handleAccountSave} className="grid gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <label className="block">
+                    <span className="text-gray-700 font-semibold">First Name</span>
+                    <input
+                      value={accountInfo.firstName}
+                      onChange={(e) => handleAccountChange('firstName', e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                      placeholder="Jane"
+                      required
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-gray-700 font-semibold">Middle Name</span>
+                    <input
+                      value={accountInfo.middleName}
+                      onChange={(e) => handleAccountChange('middleName', e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                      placeholder="A."
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-gray-700 font-semibold">Last Name</span>
+                    <input
+                      value={accountInfo.lastName}
+                      onChange={(e) => handleAccountChange('lastName', e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                      placeholder="Doe"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="text-gray-700 font-semibold">Contact Number</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={accountInfo.contactNumber}
+                    onChange={(e) => handleAccountChange('contactNumber', e.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                    placeholder="09XXXXXXXXX"
+                    autoComplete="tel"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-gray-700 font-semibold">Delivery Address</span>
+                  <textarea
+                    value={accountInfo.address}
+                    onChange={(e) => handleAccountChange('address', e.target.value)}
+                    className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                    placeholder="Street, Barangay, City, Province"
+                    required
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Use a complete delivery address, including street, barangay, city, and any landmarks. If your delivery trucks will use GPS routing later, keep this address exact and add pin coordinates in the truck app.
+                  </p>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={accountSaving}
+                  className={`inline-flex items-center justify-center rounded-2xl px-6 py-4 text-white font-bold transition ${accountSaving ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+                >
+                  {accountSaving ? 'Saving...' : 'Save Account Info'}
+                </button>
+              </form>
             </div>
           )}
         </div>

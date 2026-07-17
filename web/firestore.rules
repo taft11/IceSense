@@ -1,14 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
     match /orders/{orderId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null
+      allow read: if isOwner(resource.data.userId);
+
+      allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasAll(['userId', 'items', 'total', 'status', 'createdAt', 'customerName', 'customerEmail']);
-      allow update, delete: if request.auth != null
-        && resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'items', 'total', 'status', 'createdAt', 'customerName', 'customerEmail'])
+        && request.resource.data.userId is string
+        && request.resource.data.items is list
+        && request.resource.data.total is number
+        && request.resource.data.status is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.customerName is string
+        && request.resource.data.customerEmail is string;
+
+      allow update, delete: if isOwner(resource.data.userId)
         && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      allow create, update: if isOwner(userId)
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.contactNumber is string
+        && request.resource.data.address is string
+        && (request.resource.data.middleName is string || !request.resource.data.keys().hasAll(['middleName']))
+        && (request.resource.data.updatedAt is timestamp || !request.resource.data.keys().hasAll(['updatedAt']));
+
+      allow delete: if false;
     }
   }
 }
