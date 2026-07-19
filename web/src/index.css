@@ -7,3 +7,19 @@
 body {
   background-color: #f3f4f6;
 }
+
+/* Overview-specific typography: professional font stack and disable forced uppercase */
+.overview-page {
+  /* inherit the project's `font-sans` (used by Orders) */
+  font-family: inherit;
+}
+
+/* Override Tailwind's `uppercase` utility inside the overview to use normal casing */
+.overview-page .uppercase {
+  text-transform: none !important;
+}
+
+/* Slightly tighten letter-spacing for a professional look in the overview */
+.overview-page .tracking-wider {
+  letter-spacing: 0.01em;
+}
