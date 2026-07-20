@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Thermometer, Droplets, Package, Truck, LayoutDashboard, Bell, 
   ClipboardList, Boxes, Route, Menu, ArrowLeft, ArrowRight, 
@@ -10,6 +11,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState('overview');
   const [iotData, setIotData] = useState({
     temperature: 'Loading...',
@@ -107,6 +109,7 @@ export default function AdminDashboard() {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      navigate('/admin-login', { replace: true });
     } catch (error) {
       console.error('Sign out failed', error);
     }
@@ -171,9 +174,6 @@ export default function AdminDashboard() {
       <main className="ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
         <div className="mx-auto max-w-6xl pb-12">
           
-          {/* ========================================= */}
-          {/* MODERN OVERVIEW UI                        */}
-          {/* ========================================= */}
           {activeView === 'overview' ? (
             <div className="animate-fade-in overview-page">
               
@@ -205,6 +205,10 @@ export default function AdminDashboard() {
                     <div className="flex items-baseline gap-2">
                       <p className="text-3xl font-black text-gray-900">{iotData.temperature}</p>
                       <span className="text-sm font-medium text-gray-400">/ -18°C Target</span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+                      <Droplets className="h-4 w-4" />
+                      <span>Humidity: {iotData.humidity}</span>
                     </div>
                   </div>
                 </div>

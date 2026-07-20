@@ -232,6 +232,11 @@ export default function CustomerPortal() {
     setCartItems((prev) => prev.filter((item) => item.productId !== productId));
   };
 
+  const getFullName = () => [accountInfo.firstName, accountInfo.middleName, accountInfo.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ');
+
   const handleOrder = (e) => {
     e.preventDefault();
     if (cartItems.length === 0) return;
@@ -241,6 +246,8 @@ export default function CustomerPortal() {
       setOrdersError('Please sign in to place an order.');
       return;
     }
+
+    const fullName = getFullName();
 
     setOrderStatus('processing');
 
@@ -258,7 +265,7 @@ export default function CustomerPortal() {
           total: cartSubtotal,
           status: 'Placed',
           createdAt: serverTimestamp(),
-          customerName: currentUser.displayName || currentUser.email || 'Customer',
+          customerName: fullName || currentUser.displayName || currentUser.email || 'Customer',
           customerEmail: currentUser.email || '',
         };
 

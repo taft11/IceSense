@@ -29,7 +29,7 @@ export default function Home() {
                The Leading <span className="text-[#4091c9]">Packaged Ice</span><br/>Supplier
             </h1>
             <p className="text-xl md:text-2xl text-blue-50 max-w-2xl mb-10 leading-relaxed drop-shadow-md">
-               There is more to great ice than just freezing water. We deliver premium, purified ice with real-time inventory tracking to keep your business running smoothly.
+               There is more to great ice than just freezing water. We provide premium, purified ice with dependable service, ensuring your business and everyday needs are always covered.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
                <Link to="/portal" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white font-bold py-4 px-8 rounded-full text-lg transition duration-300 flex items-center justify-center shadow-xl">
