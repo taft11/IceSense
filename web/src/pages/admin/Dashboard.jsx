@@ -6,7 +6,7 @@ import {
   Calendar, TrendingUp, AlertTriangle, Activity
 } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 
@@ -24,6 +24,9 @@ export default function AdminDashboard() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [ordersPage, setOrdersPage] = useState(1);
+  const [confirmingOrderId, setConfirmingOrderId] = useState(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState(null);
 
   const ORDERS_PER_PAGE = 6;
 
@@ -112,6 +115,33 @@ export default function AdminDashboard() {
       navigate('/admin-login', { replace: true });
     } catch (error) {
       console.error('Sign out failed', error);
+    }
+  };
+
+  const openConfirmModal = (order) => {
+    setPendingOrder(order);
+    setConfirmModalOpen(true);
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModalOpen(false);
+    setPendingOrder(null);
+  };
+
+  const handleConfirmOrder = async () => {
+    if (!pendingOrder?.id) return;
+
+    try {
+      setConfirmingOrderId(pendingOrder.id);
+      await updateDoc(doc(db, 'orders', pendingOrder.id), {
+        status: 'Confirmed',
+      });
+      closeConfirmModal();
+    } catch (error) {
+      console.error('Unable to confirm order', error);
+      setOrdersError('Unable to confirm order right now.');
+    } finally {
+      setConfirmingOrderId(null);
     }
   };
 
@@ -412,6 +442,7 @@ export default function AdminDashboard() {
                             <th className="px-4 py-3 text-left font-semibold text-gray-700">Total</th>
                             <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
                             <th className="px-4 py-3 text-left font-semibold text-gray-700">Placed</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-700">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -447,6 +478,21 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-gray-600">{formatDate(order.createdAt)}</td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  onClick={() => openConfirmModal(order)}
+                                  disabled={confirmingOrderId === order.id || (order.status || '').toLowerCase() === 'confirmed' || (order.status || '').toLowerCase() === 'completed'}
+                                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${((order.status || '').toLowerCase() === 'confirmed' || (order.status || '').toLowerCase() === 'completed')
+                                    ? 'bg-green-100 text-green-700 cursor-default'
+                                    : 'bg-[#4091c9] text-white hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-blue-300'}`}
+                                >
+                                  {confirmingOrderId === order.id
+                                    ? 'Confirming...'
+                                    : ((order.status || '').toLowerCase() === 'confirmed' || (order.status || '').toLowerCase() === 'completed'
+                                      ? 'Confirmed'
+                                      : 'Confirm')}
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -514,6 +560,39 @@ export default function AdminDashboard() {
           )}
         </div>
       </main>
+
+      {confirmModalOpen && pendingOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-[#4091c9]">
+              <ClipboardList className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Confirm this order?</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              This will mark order <span className="font-semibold text-gray-900">#{pendingOrder.id?.slice(0, 8).toUpperCase()}</span> as <span className="font-semibold text-[#4091c9]">Confirmed</span>.
+            </p>
+            <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-600">
+              <p className="font-semibold text-gray-800">Customer</p>
+              <p className="mt-1">{pendingOrder.customerName || 'Unknown customer'}</p>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={closeConfirmModal}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmOrder}
+                disabled={confirmingOrderId === pendingOrder.id}
+                className="rounded-xl bg-[#4091c9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {confirmingOrderId === pendingOrder.id ? 'Confirming...' : 'Yes, confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

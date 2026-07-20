@@ -101,6 +101,7 @@ export default function CustomerPortal() {
         setOrders([]);
         setOrdersLoading(false);
         setOrdersError('');
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -132,7 +133,7 @@ export default function CustomerPortal() {
       if (unsubscribeOrders) unsubscribeOrders();
       unsubscribeAuth();
     };
-  }, []);
+  }, [navigate]);
 
   const handleLogout = async () => {
     try {
