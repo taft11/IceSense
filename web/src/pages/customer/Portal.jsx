@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
+import { addDoc, collection, deleteField, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
-import { ShoppingCart, CheckCircle, Plus, Minus, Snowflake, Info, Package, LogOut, Clock3, ReceiptText, X } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Plus, Minus, Snowflake, Info, Package, LogOut, Clock3, ReceiptText, X, ChevronDown, MapPin, ShieldCheck, Trash2 } from 'lucide-react';
 
 // Product Catalog
 const PRODUCTS = [
@@ -37,16 +37,40 @@ export default function CustomerPortal() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [activeView, setActiveView] = useState('order');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [accountSection, setAccountSection] = useState('profile');
   const [accountInfo, setAccountInfo] = useState({
     firstName: '',
     middleName: '',
     lastName: '',
+    email: '',
     contactNumber: '',
-    address: '',
+    gender: '',
+    dateOfBirth: '',
   });
+  const [addresses, setAddresses] = useState([]);
+  const [addressForm, setAddressForm] = useState({
+    id: null,
+    label: 'Home',
+    street: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    isDefault: false,
+  });
+  const [addressEditingId, setAddressEditingId] = useState(null);
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
   const [accountError, setAccountError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
 
   // Get the details of the currently selected product
   const activeProduct = PRODUCTS.find((p) => p.id === selectedProductId);
@@ -65,27 +89,34 @@ export default function CustomerPortal() {
   useEffect(() => {
     let unsubscribeOrders = null;
 
-    const loadUserAccount = async (userId) => {
+    const loadUserAccount = async (userId, userEmail) => {
       try {
         const userDoc = doc(db, 'users', userId);
         const snapshot = await getDoc(userDoc);
         if (snapshot.exists()) {
           const data = snapshot.data();
+          const loadedAddresses = Array.isArray(data.addresses) ? data.addresses : [];
           setAccountInfo({
             firstName: data.firstName || '',
             middleName: data.middleName || '',
             lastName: data.lastName || '',
+            email: data.email || userEmail || '',
             contactNumber: data.contactNumber || '',
-            address: data.address || '',
+            gender: data.gender || '',
+            dateOfBirth: data.dateOfBirth || '',
           });
+          setAddresses(loadedAddresses);
         } else {
           setAccountInfo({
             firstName: '',
             middleName: '',
             lastName: '',
+            email: userEmail || '',
             contactNumber: '',
-            address: '',
+            gender: '',
+            dateOfBirth: '',
           });
+          setAddresses([]);
         }
       } catch (error) {
         console.error('Failed to load account info', error);
@@ -106,7 +137,7 @@ export default function CustomerPortal() {
         return;
       }
 
-      loadUserAccount(user.uid);
+      loadUserAccount(user.uid, user.email);
 
       setOrdersLoading(true);
       const ordersRef = collection(db, 'orders');
@@ -160,6 +191,7 @@ export default function CustomerPortal() {
       setQuantity(1);
       setOrderStatus('idle');
     }
+    setAccountMenuOpen(false);
   };
 
   // Handlers for quantity buttons
@@ -239,6 +271,42 @@ export default function CustomerPortal() {
     .filter(Boolean)
     .join(' ');
 
+  const persistAccountData = async (nextAddresses = addresses, nextDefaultAddressId = null) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Please sign in before saving account details.');
+    }
+
+    const normalizedAddresses = (nextAddresses || []).map((address) => ({
+      ...address,
+      id: address.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    }));
+    const resolvedDefaultAddressId = nextDefaultAddressId || normalizedAddresses.find((address) => address.isDefault)?.id || null;
+
+    const payload = {
+      firstName: accountInfo.firstName || '',
+      middleName: accountInfo.middleName || '',
+      lastName: accountInfo.lastName || '',
+      email: currentUser.email || accountInfo.email || '',
+      contactNumber: accountInfo.contactNumber || '',
+      gender: accountInfo.gender || '',
+      dateOfBirth: accountInfo.dateOfBirth || '',
+      addresses: normalizedAddresses,
+      defaultAddressId: resolvedDefaultAddressId,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (accountInfo.address) {
+      payload.address = accountInfo.address;
+    } else {
+      payload.address = deleteField();
+    }
+
+    const userDoc = doc(db, 'users', currentUser.uid);
+    await setDoc(userDoc, payload, { merge: true });
+    return payload;
+  };
+
   const handleOrder = (e) => {
     e.preventDefault();
     if (cartItems.length === 0) return;
@@ -301,57 +369,179 @@ export default function CustomerPortal() {
     setAccountInfo((prev) => ({ ...prev, [field]: value }));
   };
 
-  const validateAccountInfo = () => {
-    if (!accountInfo.firstName.trim()) return 'First name is required.';
-    if (!accountInfo.lastName.trim()) return 'Last name is required.';
-
-    const phone = accountInfo.contactNumber.trim();
-    if (!phone) return 'Contact number is required.';
-    const phoneRegex = /^(?:\+63|0)9\d{9}$/;
-    if (!phoneRegex.test(phone)) return 'Enter a valid Philippine mobile number, e.g. 09171234567 or +639171234567.';
-
-    if (!accountInfo.address.trim() || accountInfo.address.trim().length < 10) {
-      return 'Enter a complete delivery address with street, barangay, and city.';
-    }
-
-    return '';
+  const handleAddressChange = (field, value) => {
+    setAddressForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAccountSave = async (e) => {
-    e.preventDefault();
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setAccountError('Please sign in before saving account details.');
-      setAccountMessage('');
-      return;
-    }
+  const resetAddressForm = () => {
+    setAddressEditingId(null);
+    setAddressForm({
+      id: null,
+      label: 'Home',
+      street: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: '',
+      isDefault: false,
+    });
+  };
 
-    const validationError = validateAccountInfo();
-    if (validationError) {
-      setAccountError(validationError);
+  const startEditingAddress = (address) => {
+    setAddressEditingId(address.id);
+    setAddressForm({ ...address });
+  };
+
+  const handleAddressSave = async (e) => {
+    e.preventDefault();
+    if (!addressForm.street.trim() || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.postalCode.trim()) {
+      setAccountError('Please fill out the street, city, state, and postal code for the address.');
       setAccountMessage('');
       return;
     }
 
     setAccountSaving(true);
+    setAccountError('');
+    setAccountMessage('');
+
+    try {
+      const nextAddresses = [...addresses];
+      const normalizedAddress = {
+        ...addressForm,
+        id: addressForm.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        street: addressForm.street.trim(),
+        city: addressForm.city.trim(),
+        state: addressForm.state.trim(),
+        postalCode: addressForm.postalCode.trim(),
+        country: addressForm.country.trim(),
+        label: addressForm.label.trim() || 'Home',
+      };
+
+      if (normalizedAddress.isDefault) {
+        nextAddresses.forEach((address) => {
+          address.isDefault = false;
+        });
+      }
+
+      const existingIndex = nextAddresses.findIndex((address) => address.id === normalizedAddress.id);
+      if (existingIndex >= 0) {
+        nextAddresses[existingIndex] = normalizedAddress;
+      } else {
+        nextAddresses.push(normalizedAddress);
+      }
+
+      const nextDefaultAddressId = normalizedAddress.isDefault ? normalizedAddress.id : null;
+      setAddresses(nextAddresses);
+      await persistAccountData(nextAddresses, nextDefaultAddressId);
+      setAccountMessage(addressEditingId ? 'Address updated successfully.' : 'Address added successfully.');
+      resetAddressForm();
+    } catch (error) {
+      console.error('Failed to save address', error);
+      setAccountError('Unable to save the address right now.');
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleSetDefaultAddress = async (addressId) => {
+    const nextAddresses = addresses.map((address) => ({
+      ...address,
+      isDefault: address.id === addressId,
+    }));
+
+    setAddresses(nextAddresses);
+    try {
+      await persistAccountData(nextAddresses, addressId);
+      setAccountMessage('Default address updated.');
+      setAccountError('');
+    } catch (error) {
+      console.error('Failed to set default address', error);
+      setAccountError('Unable to update the default address.');
+    }
+  };
+
+  const handleRemoveAddress = async (addressId) => {
+    const nextAddresses = addresses.filter((address) => address.id !== addressId);
+    const fallbackDefault = nextAddresses[0]?.id || null;
+    setAddresses(nextAddresses);
+    try {
+      await persistAccountData(nextAddresses, fallbackDefault);
+      setAccountMessage('Address removed.');
+      setAccountError('');
+    } catch (error) {
+      console.error('Failed to remove address', error);
+      setAccountError('Unable to remove the address.');
+    }
+  };
+
+  const handleAccountSave = async (e) => {
+    e.preventDefault();
+    setAccountSaving(true);
     setAccountMessage('');
     setAccountError('');
 
     try {
-      const userDoc = doc(db, 'users', currentUser.uid);
-      await setDoc(userDoc, {
-        ...accountInfo,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-
-      setAccountMessage('Account information saved successfully.');
+      await persistAccountData(addresses);
+      setAccountMessage('Profile saved successfully. You can come back anytime to update it.');
       setAccountError('');
     } catch (error) {
       console.error('Failed to save account info', error);
-      setAccountError('Unable to save account information. Please try again.');
+      setAccountError(error.message || 'Unable to save account information. Please try again.');
       setAccountMessage('');
     } finally {
       setAccountSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    const currentUser = auth.currentUser;
+
+    if (!currentUser?.email) {
+      setPasswordError('Please sign in again before changing your password.');
+      setPasswordMessage('');
+      return;
+    }
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setPasswordError('Please complete all password fields.');
+      setPasswordMessage('');
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('Your new password must be at least 6 characters long.');
+      setPasswordMessage('');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      setPasswordMessage('');
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordError('');
+    setPasswordMessage('');
+
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, passwordForm.currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, passwordForm.newPassword);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordMessage('Password changed successfully.');
+    } catch (error) {
+      console.error('Password change failed', error);
+      if (error?.code === 'auth/wrong-password') {
+        setPasswordError('Your current password is incorrect.');
+      } else if (error?.code === 'auth/requires-recent-login') {
+        setPasswordError('Please sign in again and try changing your password.');
+      } else {
+        setPasswordError('Unable to change your password right now.');
+      }
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -382,13 +572,57 @@ export default function CustomerPortal() {
             >
               My Orders
             </button>
-            <button
-              type="button"
-              onClick={() => handleViewChange('account')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeView === 'account' ? 'bg-[#4091c9] text-white shadow-sm' : 'text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
-            >
-              My Account
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountMenuOpen((prev) => !prev);
+                  setActiveView('account');
+                  setAccountSection('profile');
+                }}
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${activeView === 'account' ? 'bg-[#4091c9] text-white shadow-sm' : 'text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+              >
+                My Account
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              {accountMenuOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSection('profile');
+                      setActiveView('account');
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-blue-50 hover:text-[#4091c9]"
+                  >
+                    <Info className="h-4 w-4" /> Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSection('addresses');
+                      setActiveView('account');
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-blue-50 hover:text-[#4091c9]"
+                  >
+                    <MapPin className="h-4 w-4" /> Addresses
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSection('password');
+                      setActiveView('account');
+                      setAccountMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-blue-50 hover:text-[#4091c9]"
+                  >
+                    <ShieldCheck className="h-4 w-4" /> Change Password
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setIsCartOpen(true)}
@@ -577,13 +811,33 @@ export default function CustomerPortal() {
             </div>
           ) : (
             <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-800">My Account</h2>
-                  <p className="text-gray-600">Fill in your delivery and contact details below.</p>
+                  <p className="text-gray-600">Manage your profile, delivery addresses, and password from one place.</p>
                 </div>
-                <div className="rounded-full bg-blue-50 p-3 text-[#4091c9]">
-                  <Info className="h-6 w-6" />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAccountSection('profile')}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${accountSection === 'profile' ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+                  >
+                    Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountSection('addresses')}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${accountSection === 'addresses' ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+                  >
+                    Addresses
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountSection('password')}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${accountSection === 'password' ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+                  >
+                    Change Password
+                  </button>
                 </div>
               </div>
 
@@ -598,77 +852,293 @@ export default function CustomerPortal() {
                 </div>
               )}
 
-              <form onSubmit={handleAccountSave} className="grid gap-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <label className="block">
-                    <span className="text-gray-700 font-semibold">First Name</span>
-                    <input
-                      value={accountInfo.firstName}
-                      onChange={(e) => handleAccountChange('firstName', e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
-                      placeholder="Jane"
-                      required
-                    />
-                  </label>
+              {accountSection === 'profile' && (
+                <form onSubmit={handleAccountSave} className="grid gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">First Name</span>
+                      <input
+                        value={accountInfo.firstName}
+                        onChange={(e) => handleAccountChange('firstName', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                        placeholder="Jane"
+                      />
+                    </label>
 
-                  <label className="block">
-                    <span className="text-gray-700 font-semibold">Middle Name</span>
-                    <input
-                      value={accountInfo.middleName}
-                      onChange={(e) => handleAccountChange('middleName', e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
-                      placeholder="A."
-                    />
-                  </label>
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Middle Name</span>
+                      <input
+                        value={accountInfo.middleName}
+                        onChange={(e) => handleAccountChange('middleName', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                        placeholder="A."
+                      />
+                    </label>
 
-                  <label className="block">
-                    <span className="text-gray-700 font-semibold">Last Name</span>
-                    <input
-                      value={accountInfo.lastName}
-                      onChange={(e) => handleAccountChange('lastName', e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
-                      placeholder="Doe"
-                      required
-                    />
-                  </label>
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Last Name</span>
+                      <input
+                        value={accountInfo.lastName}
+                        onChange={(e) => handleAccountChange('lastName', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                        placeholder="Doe"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Email</span>
+                      <input
+                        value={accountInfo.email}
+                        onChange={(e) => handleAccountChange('email', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                        placeholder="you@example.com"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Phone Number</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={accountInfo.contactNumber}
+                        onChange={(e) => handleAccountChange('contactNumber', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                        placeholder="09XXXXXXXXX"
+                        autoComplete="tel"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Gender</span>
+                      <select
+                        value={accountInfo.gender}
+                        onChange={(e) => handleAccountChange('gender', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                      >
+                        <option value="">Select gender</option>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-gray-700 font-semibold">Date of Birth</span>
+                      <input
+                        type="date"
+                        value={accountInfo.dateOfBirth}
+                        onChange={(e) => handleAccountChange('dateOfBirth', e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={accountSaving}
+                    className={`inline-flex items-center justify-center rounded-2xl px-6 py-4 text-white font-bold transition ${accountSaving ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+                  >
+                    {accountSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </form>
+              )}
+
+              {accountSection === 'addresses' && (
+                <div className="space-y-6">
+                  <form onSubmit={handleAddressSave} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-gray-800">{addressEditingId ? 'Edit address' : 'Add a new address'}</h3>
+                      {addressEditingId && (
+                        <button type="button" onClick={resetAddressForm} className="text-sm font-semibold text-[#4091c9]">
+                          Cancel edit
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">Label</span>
+                        <input
+                          value={addressForm.label}
+                          onChange={(e) => handleAddressChange('label', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="Home, Office, etc."
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">Street / Building</span>
+                        <input
+                          value={addressForm.street}
+                          onChange={(e) => handleAddressChange('street', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="123 Sample Street"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">City</span>
+                        <input
+                          value={addressForm.city}
+                          onChange={(e) => handleAddressChange('city', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="Quezon City"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">State / Province</span>
+                        <input
+                          value={addressForm.state}
+                          onChange={(e) => handleAddressChange('state', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="Metro Manila"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">Postal Code</span>
+                        <input
+                          value={addressForm.postalCode}
+                          onChange={(e) => handleAddressChange('postalCode', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="1111"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold text-gray-700">Country</span>
+                        <input
+                          value={addressForm.country}
+                          onChange={(e) => handleAddressChange('country', e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                          placeholder="Philippines"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={addressForm.isDefault}
+                        onChange={(e) => handleAddressChange('isDefault', e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#4091c9] focus:ring-[#4091c9]"
+                      />
+                      Set as default address
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={accountSaving}
+                      className={`mt-4 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition ${accountSaving ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+                    >
+                      <Plus className="h-4 w-4" /> {addressEditingId ? 'Update Address' : 'Add Address'}
+                    </button>
+                  </form>
+
+                  <div className="space-y-3">
+                    {addresses.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600">
+                        No addresses yet. Add your first delivery location above.
+                      </div>
+                    ) : (
+                      addresses.map((address) => (
+                        <div key={address.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-gray-800">{address.label || 'Address'}</p>
+                                {address.isDefault && (
+                                  <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                                    Default
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-2 text-sm text-gray-600">{address.street}</p>
+                              <p className="text-sm text-gray-600">{[address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {!address.isDefault && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetDefaultAddress(address.id)}
+                                  className="rounded-full border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]"
+                                >
+                                  Set as default
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => startEditingAddress(address)}
+                                className="rounded-full border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAddress(address.id)}
+                                className="rounded-full border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="mr-1 inline h-4 w-4" /> Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
+              )}
 
-                <label className="block">
-                  <span className="text-gray-700 font-semibold">Contact Number</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    value={accountInfo.contactNumber}
-                    onChange={(e) => handleAccountChange('contactNumber', e.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
-                    placeholder="09XXXXXXXXX"
-                    autoComplete="tel"
-                    required
-                  />
-                </label>
+              {accountSection === 'password' && (
+                <form onSubmit={handlePasswordSubmit} className="max-w-xl rounded-2xl border border-gray-200 bg-gray-50 p-6">
+                  {passwordError && (
+                    <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordMessage && (
+                    <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+                      {passwordMessage}
+                    </div>
+                  )}
 
-                <label className="block">
-                  <span className="text-gray-700 font-semibold">Delivery Address</span>
-                  <textarea
-                    value={accountInfo.address}
-                    onChange={(e) => handleAccountChange('address', e.target.value)}
-                    className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
-                    placeholder="Street, Barangay, City, Province"
-                    required
-                  />
-                  <p className="mt-2 text-sm text-gray-500">
-                    Use a complete delivery address, including street, barangay, city, and any landmarks. If your delivery trucks will use GPS routing later, keep this address exact and add pin coordinates in the truck app.
-                  </p>
-                </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-gray-700">Current Password</span>
+                    <input
+                      type="password"
+                      value={passwordForm.currentPassword}
+                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                    />
+                  </label>
+                  <label className="mt-4 block">
+                    <span className="text-sm font-semibold text-gray-700">New Password</span>
+                    <input
+                      type="password"
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                    />
+                  </label>
+                  <label className="mt-4 block">
+                    <span className="text-sm font-semibold text-gray-700">Confirm New Password</span>
+                    <input
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                    />
+                  </label>
 
-                <button
-                  type="submit"
-                  disabled={accountSaving}
-                  className={`inline-flex items-center justify-center rounded-2xl px-6 py-4 text-white font-bold transition ${accountSaving ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
-                >
-                  {accountSaving ? 'Saving...' : 'Save Account Info'}
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={passwordSaving}
+                    className={`mt-5 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition ${passwordSaving ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+                  >
+                    <ShieldCheck className="h-4 w-4" /> {passwordSaving ? 'Updating...' : 'Change Password'}
+                  </button>
+                </form>
+              )}
             </div>
           )}
         </div>

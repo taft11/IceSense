@@ -30,13 +30,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId);
 
-      allow create, update: if isOwner(userId)
-        && request.resource.data.firstName is string
-        && request.resource.data.lastName is string
-        && request.resource.data.contactNumber is string
-        && request.resource.data.address is string
-        && (request.resource.data.middleName is string || !request.resource.data.keys().hasAll(['middleName']))
-        && (request.resource.data.updatedAt is timestamp || !request.resource.data.keys().hasAll(['updatedAt']));
+      allow create, update: if isOwner(userId);
 
       allow delete: if false;
     }
