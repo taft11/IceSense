@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
-import { ShoppingCart, CheckCircle, Plus, Minus, Snowflake, Info, Package, LogOut, Menu, Clock3, ReceiptText } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Plus, Minus, Snowflake, Info, Package, LogOut, Clock3, ReceiptText, X } from 'lucide-react';
 
 // Product Catalog
 const PRODUCTS = [
@@ -36,6 +36,7 @@ export default function CustomerPortal() {
   const [orderStatus, setOrderStatus] = useState('idle'); // 'idle', 'processing', 'success'
   const [loggingOut, setLoggingOut] = useState(false);
   const [activeView, setActiveView] = useState('order');
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [accountInfo, setAccountInfo] = useState({
     firstName: '',
     middleName: '',
@@ -355,65 +356,68 @@ export default function CustomerPortal() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-sans">
-      {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-gray-200 bg-white p-6 shadow-sm md:flex">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-black text-gray-800 tracking-tight flex items-center">
-             Bella Erin Tube Ice
-          </h2>
-          <Menu className="h-5 w-5 text-gray-400" />
-        </div>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="Bella Erin Tube Ice Logo"
+              className="h-14 w-auto"
+            />
+          </div>
 
-        <nav className="flex-1">
-          <ul className="space-y-4">
-            <li>
-              <button
-                type="button"
-                onClick={() => handleViewChange('order')}
-                disabled={activeView === 'order'}
-                className={`w-full flex items-center text-left p-3 rounded-lg transition-colors ${activeView === 'order' ? 'text-[#4091c9] font-bold bg-blue-50 cursor-default' : 'text-gray-600 hover:text-[#4091c9] hover:bg-blue-50/60'}`}
-              >
-               Order Ice
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => handleViewChange('orders')}
-                disabled={activeView === 'orders'}
-                className={`w-full flex items-center text-left p-3 rounded-lg transition-colors ${activeView === 'orders' ? 'text-[#4091c9] font-bold bg-blue-50 cursor-default' : 'text-gray-600 hover:text-[#4091c9] hover:bg-blue-50/60'}`}
-              >
-                My Orders
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={() => handleViewChange('account')}
-                disabled={activeView === 'account'}
-                className={`w-full flex items-center text-left p-3 rounded-lg transition-colors ${activeView === 'account' ? 'text-[#4091c9] font-bold bg-blue-50 cursor-default' : 'text-gray-600 hover:text-[#4091c9] hover:bg-blue-50/60'}`}
-              >
-                My Account
-              </button>
-            </li>
-          </ul>
-        </nav>
-
-        <div className="mt-6">
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="w-full flex items-center justify-center p-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold transition-colors"
-          >
-            {loggingOut ? 'Logging out...' : <> Sign Out</>}
-          </button>
+          <nav className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => handleViewChange('order')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeView === 'order' ? 'bg-[#4091c9] text-white shadow-sm' : 'text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+            >
+              Order Ice
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewChange('orders')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeView === 'orders' ? 'bg-[#4091c9] text-white shadow-sm' : 'text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+            >
+              My Orders
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewChange('account')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeView === 'account' ? 'bg-[#4091c9] text-white shadow-sm' : 'text-gray-700 hover:bg-blue-50 hover:text-[#4091c9]'}`}
+            >
+              My Account
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCartOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#4091c9] hover:text-[#4091c9]"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Cart
+              {cartItemCount > 0 && (
+                <span className="rounded-full bg-[#4091c9] px-2 py-0.5 text-xs text-white">
+                  {cartItemCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+            >
+              <LogOut className="h-4 w-4" />
+              {loggingOut ? 'Signing out...' : 'Sign Out'}
+            </button>
+          </nav>
         </div>
-      </aside>
+      </header>
 
       {/* Main Content */}
-      <main className="ml-0 flex-1 p-4 sm:p-8 overflow-x-hidden md:ml-64">
-        <div className="max-w-5xl mx-auto pb-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl pb-8">
           {activeView === 'order' ? (
             <>
               {/* Header / Hero Section */}
@@ -430,7 +434,7 @@ export default function CustomerPortal() {
 
               {/* PRODUCT SELECTION GRID */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">1. Select Ice Type</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Select Ice Type</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {PRODUCTS.map((product) => (
                     <div 
@@ -462,7 +466,7 @@ export default function CustomerPortal() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column: Product Details & Live Stock */}
                 <div className="space-y-6">
-                  <h2 className="text-xl font-bold text-gray-800">2. Review Details</h2>
+                  <h2 className="text-xl font-bold text-gray-800">Review Details</h2>
 
                   
 
@@ -480,11 +484,10 @@ export default function CustomerPortal() {
 
                 {/* Right Column: Cart Builder */}
                 <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-6">3. Build Your Cart</h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-6">Quantity</h2>
 
                   <form onSubmit={addToCart}>
                     <div className="mb-6">
-                      <label className="block text-gray-700 font-semibold mb-3">Select Quantity</label>
                       <div className="flex items-center space-x-4 bg-gray-50 p-2 rounded-xl border border-gray-200 w-fit">
                         <button type="button" onClick={decreaseQuantity} className="p-3 rounded-lg bg-white hover:bg-gray-100 text-gray-800 shadow-sm transition border border-gray-100">
                           <Minus className="h-5 w-5" />
@@ -508,71 +511,6 @@ export default function CustomerPortal() {
                       {(activeStock === 0 || getRemainingStockForProduct(selectedProductId) <= 0) && 'Out of Stock'}
                     </button>
                   </form>
-
-                  <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-blue-900 uppercase tracking-wider">Cart Summary</h4>
-                        <p className="text-sm text-blue-700">{cartItemCount} item{cartItemCount === 1 ? '' : 's'} selected</p>
-                      </div>
-                      <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#4091c9]">
-                        {cartItems.length} {cartItems.length === 1 ? 'product' : 'products'}
-                      </div>
-                    </div>
-
-                    {cartItems.length === 0 ? (
-                      <p className="text-sm text-blue-800">Your cart is empty. Add a product to start building your order.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {cartItems.map((item) => {
-                          const product = PRODUCTS.find((entry) => entry.id === item.productId);
-                          return (
-                            <div key={item.productId} className="rounded-xl bg-white p-3 shadow-sm border border-blue-100">
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="font-semibold text-gray-800">{product?.name}</p>
-                                  <p className="text-sm text-gray-500">₱{(product?.price ?? 0).toFixed(2)} each</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button type="button" onClick={() => updateCartItemQuantity(item.productId, -1)} className="h-8 w-8 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
-                                    <Minus className="h-4 w-4 mx-auto" />
-                                  </button>
-                                  <span className="w-8 text-center font-semibold text-gray-800">{item.quantity}</span>
-                                  <button type="button" onClick={() => updateCartItemQuantity(item.productId, 1)} className="h-8 w-8 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition" disabled={getRemainingStockForProduct(item.productId) <= 0}>
-                                    <Plus className="h-4 w-4 mx-auto" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between text-sm text-gray-600">
-                                <span>Subtotal</span>
-                                <span className="font-semibold text-gray-800">₱{(item.price * item.quantity).toFixed(2)}</span>
-                              </div>
-                              <button type="button" onClick={() => removeFromCart(item.productId)} className="mt-2 text-sm font-semibold text-red-600 hover:text-red-700">
-                                Remove
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className="flex justify-between text-xl font-black text-blue-900 border-t border-blue-200 pt-4 mt-4">
-                      <span>Total</span>
-                      <span>₱{cartSubtotal.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  <button type="button" onClick={handleOrder} disabled={orderStatus !== 'idle' || cartItems.length === 0} className={`mt-6 w-full flex justify-center items-center p-4 rounded-xl font-bold text-lg transition-all duration-300 shadow-md
-                    ${orderStatus === 'idle' && cartItems.length > 0 ? 'bg-[#4091c9] hover:bg-[#2d75aa] hover:-translate-y-0.5 text-white' : ''}
-                    ${orderStatus === 'processing' ? 'bg-[#7aa8d1] text-white cursor-not-allowed' : ''}
-                    ${orderStatus === 'success' ? 'bg-green-500 text-white' : ''}
-                    ${cartItems.length === 0 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : ''}
-                  `}>
-                    {orderStatus === 'idle' && cartItems.length > 0 && <><ShoppingCart className="mr-2 h-6 w-6" /> Place Order</>}
-                    {orderStatus === 'processing' && <><Snowflake className="mr-2 h-6 w-6 animate-spin" /> Processing...</>}
-                    {orderStatus === 'success' && <><CheckCircle className="mr-2 h-6 w-6" /> Order Successful!</>}
-                    {cartItems.length === 0 && 'Add Items to Cart'}
-                  </button>
                 </div>
               </div>
             </>
@@ -735,6 +673,87 @@ export default function CustomerPortal() {
           )}
         </div>
       </main>
+
+      <div className={`fixed inset-0 z-40 transition ${isCartOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        <div
+          className={`absolute inset-0 bg-black/50 transition ${isCartOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setIsCartOpen(false)}
+        />
+        <aside className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Your Cart</h3>
+              <p className="text-sm text-gray-500">{cartItemCount} item{cartItemCount === 1 ? '' : 's'} ready for checkout</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCartOpen(false)}
+              className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {cartItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
+                <p className="font-semibold text-gray-800">Your cart is empty</p>
+                <p className="mt-2">Add some ice products first, then come back here to review and place your order.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cartItems.map((item) => {
+                  const product = PRODUCTS.find((entry) => entry.id === item.productId);
+                  return (
+                    <div key={item.productId} className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-800">{product?.name}</p>
+                          <p className="text-sm text-gray-500">₱{(product?.price ?? 0).toFixed(2)} each</p>
+                        </div>
+                        <button type="button" onClick={() => removeFromCart(item.productId)} className="text-sm font-semibold text-red-600 hover:text-red-700">
+                          Remove
+                        </button>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => updateCartItemQuantity(item.productId, -1)} className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100">
+                            <Minus className="mx-auto h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center font-semibold text-gray-800">{item.quantity}</span>
+                          <button type="button" onClick={() => updateCartItemQuantity(item.productId, 1)} className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100" disabled={getRemainingStockForProduct(item.productId) <= 0}>
+                            <Plus className="mx-auto h-4 w-4" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800">₱{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-gray-200 bg-gray-50 px-6 py-5">
+            <div className="mb-4 flex items-center justify-between text-lg font-bold text-gray-800">
+              <span>Total</span>
+              <span>₱{cartSubtotal.toFixed(2)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleOrder}
+              disabled={orderStatus !== 'idle' || cartItems.length === 0}
+              className={`flex w-full items-center justify-center rounded-2xl p-4 font-bold text-lg transition ${orderStatus === 'idle' && cartItems.length > 0 ? 'bg-[#4091c9] text-white hover:bg-[#2d75aa]' : ''} ${orderStatus === 'processing' ? 'cursor-not-allowed bg-[#7aa8d1] text-white' : ''} ${orderStatus === 'success' ? 'bg-green-500 text-white' : ''} ${cartItems.length === 0 ? 'cursor-not-allowed bg-gray-200 text-gray-500' : ''}`}
+            >
+              {orderStatus === 'idle' && cartItems.length > 0 && <><ShoppingCart className="mr-2 h-5 w-5" /> Check Out</>}
+              {orderStatus === 'processing' && <><Snowflake className="mr-2 h-5 w-5 animate-spin" /> Processing...</>}
+              {orderStatus === 'success' && <><CheckCircle className="mr-2 h-5 w-5" /> Order Successful!</>}
+              {cartItems.length === 0 && 'Add Items to Cart'}
+            </button>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
