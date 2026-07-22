@@ -22,6 +22,7 @@ export default function CustomerPortal() {
     'crushed-sack': 60,
   });
 
+  const [selectedIceType, setSelectedIceType] = useState('tube');
   const [selectedProductId, setSelectedProductId] = useState('tube-50');
   const [quantity, setQuantity] = useState(1);
   const [cartItems, setCartItems] = useState([]);
@@ -67,6 +68,7 @@ export default function CustomerPortal() {
   });
 
   const activeProduct = PRODUCTS.find((product) => product.id === selectedProductId);
+  const filteredProducts = PRODUCTS.filter((product) => product.id.startsWith(`${selectedIceType}-`));
   const activeStock = Math.max(0, (stocks[selectedProductId] || 0) - cartItems.filter((item) => item.productId === selectedProductId).reduce((sum, item) => sum + item.quantity, 0));
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -179,6 +181,14 @@ export default function CustomerPortal() {
       setLoggingOut(false);
       console.error('Logout failed', error);
     }
+  };
+
+  const handleIceTypeSelect = (iceType) => {
+    setSelectedIceType(iceType);
+    const fallbackProduct = PRODUCTS.find((product) => product.id.startsWith(`${iceType}-`));
+    setSelectedProductId(fallbackProduct?.id || 'tube-50');
+    setQuantity(1);
+    setOrderStatus('idle');
   };
 
   const handleProductSelect = (productId) => {
@@ -568,7 +578,9 @@ export default function CustomerPortal() {
         <div className="mx-auto max-w-5xl pb-8">
           {activeView === 'order' ? (
             <OrderView
-              products={PRODUCTS}
+              products={filteredProducts}
+              selectedIceType={selectedIceType}
+              onSelectIceType={handleIceTypeSelect}
               selectedProductId={selectedProductId}
               onSelect={handleProductSelect}
               activeProduct={activeProduct}

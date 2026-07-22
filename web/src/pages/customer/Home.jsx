@@ -44,27 +44,36 @@ export default function Home() {
 
       {/* TECH & QUALITY SECTION */}
       <div id="consumer" className="py-24 bg-white">
-         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
-            <div>
-               <h2 className="text-4xl font-extrabold text-gray-900 mb-6 leading-tight">Manage your ice program from the palm of your hand.</h2>
-               <p className="text-lg text-gray-600 mb-8">
-                  Our custom portal makes placing an order a breeze and takes the guess work out of receiving a delivery. View live inventory straight from our freezer load-cells.
-               </p>
-               <ul className="space-y-6">
-                  <li className="flex items-start">
-                    <ShieldCheck className="text-[#4091c9] mr-4 h-8 w-8 shrink-0" />
-                    <span className="text-gray-700 text-lg"><strong>Live Availability:</strong> See exactly how many sacks are available before you ever hit order.</span>
-                  </li>
-                  <li className="flex items-start">
-                    <Smartphone className="text-[#4091c9] mr-4 h-8 w-8 shrink-0" />
-                    <span className="text-gray-700 text-lg"><strong>Easy Ordering:</strong> Place ice orders from your device any place, any time.</span>
-                  </li>
-                  <li className="flex items-start">
-                    <Truck className="text-[#4091c9] mr-4 h-8 w-8 shrink-0" />
-                    <span className="text-gray-700 text-lg"><strong>Smart Logistics:</strong> Our routed delivery system ensures your ice arrives frozen and on time.</span>
-                  </li>
-               </ul>
-            </div>
+         <div className="mx-auto grid max-w-7xl items-center gap-16 px-6 md:grid-cols-2">
+         <div>
+            <h2 className="mb-6 text-4xl font-extrabold leading-tight text-gray-900">
+            Order fresh ice in just a few clicks.
+            </h2>
+            <p className="mb-8 text-lg text-gray-600">
+            Whether you need ice for your store, an upcoming event, or daily business needs, our online portal makes ordering fast, simple, and reliable. 
+            </p>
+            
+            <ul className="space-y-6">
+            <li className="flex items-start">
+               <ShieldCheck className="mr-4 h-8 w-8 shrink-0 text-[#4091c9]" />
+               <span className="text-lg text-gray-700">
+                  <strong className="text-gray-900">Real-Time Stock:</strong> Check live ice availability instantly so you always know what’s in stock.
+               </span>
+            </li>
+            <li className="flex items-start">
+               <Smartphone className="mr-4 h-8 w-8 shrink-0 text-[#4091c9]" />
+               <span className="text-lg text-gray-700">
+                  <strong className="text-gray-900">Seamless Ordering:</strong> Choose your ice type, pick your quantity, and place orders anytime from your phone or laptop.
+               </span>
+            </li>
+            <li className="flex items-start">
+               <Truck className="mr-4 h-8 w-8 shrink-0 text-[#4091c9]" />
+               <span className="text-lg text-gray-700">
+                  <strong className="text-gray-900">Reliable Delivery:</strong> Get your tube or crushed ice delivered cold, fresh, and right on schedule.
+               </span>
+            </li>
+            </ul>
+         </div>
             
             {/* Purity Card */}
             <div className="bg-blue-50 rounded-3xl p-10 border border-blue-100 shadow-xl relative overflow-hidden">

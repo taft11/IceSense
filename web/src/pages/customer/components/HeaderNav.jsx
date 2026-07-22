@@ -83,7 +83,7 @@ export default function HeaderNav({
             type="button"
             onClick={onLogout}
             disabled={loggingOut}
-            className="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+            className="inline-flex items-center gap-2 rounded-full bg-[#3b82f6]/10 px-4 py-2 text-sm font-semibold text-[#2b7bb9] transition hover:bg-[#3b82f6]/20"
           >
             <LogOut className="h-4 w-4" />
             {loggingOut ? 'Signing out...' : 'Sign Out'}
