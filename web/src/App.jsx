@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Snowflake } from 'lucide-react';
 import Home from './pages/customer/Home';
 import CustomerPortal from './pages/customer/Portal';
 import AdminDashboard from './pages/admin/Dashboard';
@@ -12,8 +11,8 @@ function Layout() {
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
   const isAdminLogin = location.pathname === '/admin-login';
-  const isPortal = location.pathname === '/portal';
-  const isAdmin = location.pathname === '/admin';
+  const isPortal = location.pathname.startsWith('/portal');
+  const isAdmin = location.pathname.startsWith('/admin');
 
   return (
     <div className="min-h-screen flex flex-col font-sans relative overflow-x-hidden">
@@ -56,10 +55,10 @@ function Layout() {
       <main className={`flex-grow ${isHome ? '' : 'bg-gray-50'}`}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/portal" element={<CustomerPortal />} />
+          <Route path="/portal/*" element={<CustomerPortal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin-login" element={<AdminLogin />} />
-          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/*" element={<AdminDashboard />} />
         </Routes>
       </main>
 
