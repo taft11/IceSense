@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Bell, ClipboardList, Boxes, Route as RouteIcon, Menu } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 import Overview from './Overview';
@@ -80,7 +80,9 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    let unsubscribeOrders = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setAllOrders([]);
         setOrdersLoading(false);
@@ -88,8 +90,24 @@ export default function AdminDashboard() {
         return;
       }
 
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const role = userDoc.exists() ? userDoc.data()?.role : null;
+
+        if (role !== 'admin') {
+          await signOut(auth);
+          navigate('/admin-login', { replace: true });
+          return;
+        }
+      } catch (error) {
+        console.error('Unable to verify admin access', error);
+        await signOut(auth);
+        navigate('/admin-login', { replace: true });
+        return;
+      }
+
       const ordersRef = collection(db, 'orders');
-      const unsubscribeOrders = onSnapshot(
+      unsubscribeOrders = onSnapshot(
         ordersRef,
         (snapshot) => {
           const parsedOrders = snapshot.docs
@@ -106,12 +124,15 @@ export default function AdminDashboard() {
           setOrdersLoading(false);
         }
       );
-
-      return unsubscribeOrders;
     });
 
-    return () => unsubscribeAuth();
-  }, []);
+    return () => {
+      if (unsubscribeOrders) {
+        unsubscribeOrders();
+      }
+      unsubscribeAuth();
+    };
+  }, [navigate]);
 
   useEffect(() => {
     if (ordersPage > totalOrderPages) {

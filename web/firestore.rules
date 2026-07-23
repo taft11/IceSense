@@ -5,12 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
     function isOwner(ownerId) {
       return isSignedIn() && request.auth.uid == ownerId;
     }
 
+    function isAdminOrOwner(ownerId) {
+      return isAdmin() || isOwner(ownerId);
+    }
+
     match /orders/{orderId} {
-      allow read: if isSignedIn();
+      allow read: if isAdminOrOwner(resource.data.userId);
 
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
@@ -23,33 +31,36 @@ service cloud.firestore {
         && request.resource.data.customerName is string
         && request.resource.data.customerEmail is string;
 
-      allow update, delete: if isOwner(resource.data.userId)
-        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isOwner(resource.data.userId) && request.resource.data.userId == request.auth.uid);
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isAdmin() || isOwner(userId);
 
-      allow create, update: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'customer';
+
+      allow update: if isOwner(userId)
+        && request.resource.data.role == resource.data.role;
 
       allow delete: if false;
     }
 
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow create, update: if isAdmin();
       allow delete: if false;
     }
 
     match /inventory/{productId} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow create, update: if isAdmin();
       allow delete: if false;
     }
 
     match /stock_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isAdmin();
+      allow create: if isAdmin();
       allow update, delete: if false;
     }
   }

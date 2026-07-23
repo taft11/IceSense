@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../services/firebase';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function AdminLogin() {
@@ -18,11 +19,21 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credentials = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', credentials.user.uid));
+      const role = userDoc.exists() ? userDoc.data()?.role : null;
+
+      if (role !== 'admin') {
+        await auth.signOut();
+        throw new Error('ADMIN_ROLE_REQUIRED');
+      }
+
       navigate('/admin');
     } catch (err) {
       let errorMessage = 'Unable to sign in. Please check your credentials.';
-      if (err.message.includes('user-not-found') || err.message.includes('wrong-password')) {
+      if (err.message.includes('ADMIN_ROLE_REQUIRED')) {
+        errorMessage = 'This account is not authorized for admin access.';
+      } else if (err.message.includes('user-not-found') || err.message.includes('wrong-password')) {
         errorMessage = 'Invalid email or password.';
       } else if (err.message.includes('too-many-requests')) {
         errorMessage = 'Too many failed attempts. Please try again later.';
