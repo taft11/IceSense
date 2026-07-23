@@ -7,10 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node dependencies & builds
 node_modules
 dist
 dist-ssr
 *.local
+.next/
+out/
 
 # Editor directories and files
 .vscode/*
@@ -22,4 +25,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Security & Firebase Secrets
 src/services/firebase.js
+serviceAccountKey.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!components.json
+
+# Admin Scripts & Subfolder Secrets
+web/set-admin.js
+web/set-admin.cjs
+web/serviceAccountKey.json
+web/*.json
+!web/package.json
+!web/package-lock.json
+!web/tsconfig.json
+!web/components.json
+
+# Environment Variables
+.env
+.env*.local
+.env.production
