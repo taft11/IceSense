@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
@@ -9,6 +9,72 @@ import OrderView from './components/OrderView';
 import OrderHistoryView from './components/OrderHistoryView';
 import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
+
+const CART_STORAGE_KEY = 'icesense-cart-v1';
+const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
+
+const DELIVERY_TIME_SLOTS = [
+  { id: 'morning', label: '8:00 AM - 11:00 AM' },
+  { id: 'midday', label: '11:00 AM - 2:00 PM' },
+  { id: 'afternoon', label: '2:00 PM - 5:00 PM' },
+];
+
+const getStoredCartItems = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
+    const parsedCart = savedCart ? JSON.parse(savedCart) : [];
+    return Array.isArray(parsedCart) ? parsedCart : [];
+  } catch (error) {
+    console.error('Failed to restore cart from local storage', error);
+    return [];
+  }
+};
+
+const getStoredDeliverySettings = () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const savedSettings = window.localStorage.getItem(DELIVERY_STORAGE_KEY);
+    return savedSettings ? JSON.parse(savedSettings) : null;
+  } catch (error) {
+    console.error('Failed to restore delivery settings from local storage', error);
+    return null;
+  }
+};
+
+const addDays = (date, daysToAdd) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + daysToAdd);
+  return nextDate;
+};
+
+const toDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatReadableDate = (date) => {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+};
+
+const getEarliestDeliveryDate = (referenceDate = new Date()) => {
+  const currentDate = new Date(referenceDate);
+  currentDate.setHours(0, 0, 0, 0);
+
+  if (referenceDate.getHours() >= 20) {
+    return addDays(currentDate, 2);
+  }
+
+  return addDays(currentDate, 1);
+};
 
 export default function CustomerPortal() {
   const navigate = useNavigate();
@@ -25,7 +91,7 @@ export default function CustomerPortal() {
   const [selectedIceType, setSelectedIceType] = useState('tube');
   const [selectedProductId, setSelectedProductId] = useState('tube-50');
   const [quantity, setQuantity] = useState(1);
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(() => getStoredCartItems());
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
@@ -66,12 +132,50 @@ export default function CustomerPortal() {
     newPassword: '',
     confirmPassword: '',
   });
+  const [deliveryDate, setDeliveryDate] = useState(() => {
+    const savedSettings = getStoredDeliverySettings();
+    return savedSettings?.deliveryDate || toDateInputValue(getEarliestDeliveryDate());
+  });
+  const [deliverySlot, setDeliverySlot] = useState(() => {
+    const savedSettings = getStoredDeliverySettings();
+    return savedSettings?.deliverySlot || DELIVERY_TIME_SLOTS[0].id;
+  });
+  const [isDeliveryExpanded, setIsDeliveryExpanded] = useState(false);
+  const [isCheckoutConfirmOpen, setIsCheckoutConfirmOpen] = useState(false);
+
+  const earliestDeliveryDate = useMemo(() => getEarliestDeliveryDate(), []);
+  const maxDeliveryDate = useMemo(() => addDays(new Date(), 14), []);
+  const deliveryQuickOptions = useMemo(() => {
+    return [
+      { value: toDateInputValue(earliestDeliveryDate), label: 'Tomorrow' },
+      { value: toDateInputValue(addDays(earliestDeliveryDate, 1)), label: 'Day After Tomorrow' },
+    ];
+  }, [earliestDeliveryDate]);
+  const deliveryDateHeading = useMemo(() => formatReadableDate(new Date(`${deliveryDate}T00:00:00`)), [deliveryDate]);
 
   const activeProduct = PRODUCTS.find((product) => product.id === selectedProductId);
   const filteredProducts = PRODUCTS.filter((product) => product.id.startsWith(`${selectedIceType}-`));
   const activeStock = Math.max(0, (stocks[selectedProductId] || 0) - cartItems.filter((item) => item.productId === selectedProductId).reduce((sum, item) => sum + item.quantity, 0));
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+    }
+  }, [cartItems]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        DELIVERY_STORAGE_KEY,
+        JSON.stringify({
+          deliveryDate,
+          deliverySlot,
+        })
+      );
+    }
+  }, [deliveryDate, deliverySlot]);
 
   const getRemainingStockForProduct = (productId) => {
     const currentCartQty = cartItems
@@ -294,6 +398,40 @@ export default function CustomerPortal() {
     .filter(Boolean)
     .join(' ');
 
+  const reorderFromOrder = (order) => {
+    const normalizedItems = (order.items || []).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+    }));
+
+    if (!normalizedItems.length) return;
+
+    setCartItems((prev) => {
+      const merged = [...prev];
+
+      normalizedItems.forEach((item) => {
+        const existingIndex = merged.findIndex((entry) => entry.productId === item.productId);
+        if (existingIndex >= 0) {
+          merged[existingIndex] = {
+            ...merged[existingIndex],
+            quantity: merged[existingIndex].quantity + item.quantity,
+            price: item.price,
+            name: item.name,
+          };
+        } else {
+          merged.push(item);
+        }
+      });
+
+      return merged;
+    });
+
+    setIsCartOpen(true);
+    setOrderStatus('idle');
+  };
+
   const persistAccountData = async (nextAddresses = addresses, nextDefaultAddressId = null) => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -321,8 +459,7 @@ export default function CustomerPortal() {
     return payload;
   };
 
-  const handleOrder = (event) => {
-    event.preventDefault();
+  const handleOrder = () => {
     if (cartItems.length === 0) return;
 
     const currentUser = auth.currentUser;
@@ -332,6 +469,15 @@ export default function CustomerPortal() {
     }
 
     const fullName = getFullName();
+    const normalizedDeliveryDate = deliveryDate || toDateInputValue(earliestDeliveryDate);
+    const normalizedDeliverySlot = DELIVERY_TIME_SLOTS.find((slot) => slot.id === deliverySlot)?.label || DELIVERY_TIME_SLOTS[0].label;
+    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+    const shippingAddress = defaultAddress
+      ? `${defaultAddress.street || ''}, ${defaultAddress.city || ''}, ${defaultAddress.state || ''} ${defaultAddress.postalCode || ''}`.replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim()
+      : 'Address not provided yet';
+    const landmark = defaultAddress?.landmark || 'Not provided';
+    const paymentMethod = 'Cash on Delivery';
+
     setOrderStatus('processing');
 
     setTimeout(async () => {
@@ -350,6 +496,12 @@ export default function CustomerPortal() {
           createdAt: serverTimestamp(),
           customerName: fullName || currentUser.displayName || currentUser.email || 'Customer',
           customerEmail: currentUser.email || '',
+          deliveryDate: normalizedDeliveryDate,
+          deliveryTimeSlot: normalizedDeliverySlot,
+          deliverySlot: normalizedDeliverySlot,
+          shippingAddress,
+          landmark,
+          paymentMethod,
         };
 
         await addDoc(ordersRef, orderPayload);
@@ -374,6 +526,16 @@ export default function CustomerPortal() {
         setOrderStatus('idle');
       }
     }, 1500);
+  };
+
+  const openCheckoutConfirmation = () => {
+    if (cartItems.length === 0) return;
+    setIsCheckoutConfirmOpen(true);
+  };
+
+  const confirmCheckoutOrder = () => {
+    setIsCheckoutConfirmOpen(false);
+    handleOrder();
   };
 
   const handleAccountChange = (field, value) => {
@@ -597,6 +759,7 @@ export default function CustomerPortal() {
               orders={orders}
               ordersLoading={ordersLoading}
               ordersError={ordersError}
+              onReorder={reorderFromOrder}
             />
           ) : (
             <AccountView
@@ -637,8 +800,21 @@ export default function CustomerPortal() {
         orderStatus={orderStatus}
         onUpdateQuantity={updateCartItemQuantity}
         onRemoveItem={removeFromCart}
-        onCheckout={handleOrder}
+        onCheckout={openCheckoutConfirmation}
+        onConfirmCheckout={confirmCheckoutOrder}
+        onCancelCheckout={() => setIsCheckoutConfirmOpen(false)}
         getRemainingStock={getRemainingStockForProduct}
+        deliveryDate={deliveryDate}
+        onDeliveryDateChange={setDeliveryDate}
+        deliverySlot={deliverySlot}
+        onDeliverySlotChange={setDeliverySlot}
+        deliveryQuickOptions={deliveryQuickOptions}
+        earliestDeliveryDate={toDateInputValue(earliestDeliveryDate)}
+        maxDeliveryDate={toDateInputValue(maxDeliveryDate)}
+        deliveryDateHeading={deliveryDateHeading}
+        isDeliveryExpanded={isDeliveryExpanded}
+        onToggleDelivery={() => setIsDeliveryExpanded((prev) => !prev)}
+        isCheckoutConfirmOpen={isCheckoutConfirmOpen}
       />
     </div>
   );
