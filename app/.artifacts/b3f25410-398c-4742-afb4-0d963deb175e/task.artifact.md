@@ -1,0 +1,2 @@
+- [x] Verify `google-services.json` is in the `app/` directory
+- [x] Run Gradle build to verify fix

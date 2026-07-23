@@ -60,7 +60,7 @@ fun DeliveryApp() {
     var deliveries by remember {
         mutableStateOf(
             listOf(
-                Delivery(1, "Juan Dela Cruz", "Commonwealth Ave, Quezon City", 14.6507, 121.0509),
+                Delivery(1, "Tuff tan", "Commonwealth Ave, Quezon City", 14.6507, 121.0509),
                 Delivery(2, "Maria Clara", "Ayala Avenue, Makati City", 14.5547, 121.0244),
                 Delivery(3, "Jose Rizal", "Bonifacio Global City, Taguig", 14.5486, 121.0475),
                 Delivery(4, "Catriona Gray", "Katipunan Ave, Quezon City", 14.6394, 121.0775)
