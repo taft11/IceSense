@@ -1,4 +1,4 @@
-package com.example.icesense.ui.components
+package com.bellaerin.icesense.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*

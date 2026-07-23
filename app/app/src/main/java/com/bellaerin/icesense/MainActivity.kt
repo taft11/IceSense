@@ -1,4 +1,4 @@
-package com.example.icesense
+package com.bellaerin.icesense
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.example.icesense.model.Delivery
-import com.example.icesense.ui.screens.DeliveryListScreen
-import com.example.icesense.ui.screens.LoginScreen
-import com.example.icesense.ui.theme.IceSenseTheme
+import com.bellaerin.icesense.model.Delivery
+import com.bellaerin.icesense.ui.screens.DeliveryListScreen
+import com.bellaerin.icesense.ui.screens.LoginScreen
+import com.bellaerin.icesense.ui.theme.IceSenseTheme
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,7 +30,31 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DeliveryApp() {
-    var currentScreen by remember { mutableStateOf("login") }
+    val auth = remember { FirebaseAuth.getInstance() }
+    var currentScreen by remember { mutableStateOf("splash") }
+    
+    // Check role if user is already logged in
+    LaunchedEffect(Unit) {
+        val user = auth.currentUser
+        if (user != null) {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            firestore.collection("users").document(user.uid)
+                .get().addOnSuccessListener { document ->
+                    val role = document.getString("role")
+                    if (role == "driver") {
+                        currentScreen = "list"
+                    } else {
+                        auth.signOut()
+                        currentScreen = "login"
+                    }
+                }.addOnFailureListener {
+                    auth.signOut()
+                    currentScreen = "login"
+                }
+        } else {
+            currentScreen = "login"
+        }
+    }
     
     // Sample delivery data updated to Philippines (Metro Manila / QC)
     var deliveries by remember {
@@ -46,6 +71,11 @@ fun DeliveryApp() {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (currentScreen) {
+                "splash" -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
                 "login" -> LoginScreen(onLoginSuccess = { currentScreen = "list" })
                 "list" -> DeliveryListScreen(
                     deliveries = deliveries,
@@ -53,6 +83,10 @@ fun DeliveryApp() {
                         deliveries = deliveries.map {
                             if (it.id == id) it.copy(isConfirmed = true, proofImageUri = proofUri) else it
                         }
+                    },
+                    onLogout = {
+                        auth.signOut()
+                        currentScreen = "login"
                     }
                 )
             }

@@ -1,4 +1,4 @@
-package com.example.icesense.ui.theme
+package com.bellaerin.icesense.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

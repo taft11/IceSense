@@ -1,4 +1,4 @@
-package com.example.icesense.ui.screens
+package com.bellaerin.icesense.ui.screens
 
 import android.Manifest
 import android.content.Context
@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
@@ -40,10 +41,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import com.example.icesense.model.Delivery
-import com.example.icesense.ui.components.BellaErinLogo
-import com.example.icesense.utils.getCurrentLocation
-import com.example.icesense.utils.openGoogleMaps
+import com.bellaerin.icesense.model.Delivery
+import com.bellaerin.icesense.ui.components.BellaErinLogo
+import com.bellaerin.icesense.utils.getCurrentLocation
+import com.bellaerin.icesense.utils.openGoogleMaps
 import com.google.android.gms.location.LocationServices
 import java.io.File
 import java.text.SimpleDateFormat
@@ -52,7 +53,11 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
-fun DeliveryListScreen(deliveries: List<Delivery>, onConfirm: (Int, String?) -> Unit) {
+fun DeliveryListScreen(
+    deliveries: List<Delivery>,
+    onConfirm: (Int, String?) -> Unit,
+    onLogout: () -> Unit
+) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
@@ -130,6 +135,14 @@ fun DeliveryListScreen(deliveries: List<Delivery>, onConfirm: (Int, String?) -> 
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = "Logout",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

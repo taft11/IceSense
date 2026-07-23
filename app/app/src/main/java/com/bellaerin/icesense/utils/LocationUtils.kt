@@ -1,4 +1,4 @@
-package com.example.icesense.utils
+package com.bellaerin.icesense.utils
 
 import android.Manifest
 import android.content.Context

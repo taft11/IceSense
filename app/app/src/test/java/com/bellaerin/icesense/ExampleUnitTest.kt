@@ -1,4 +1,4 @@
-package com.example.icesense
+package com.bellaerin.icesense
 
 import org.junit.Test
 

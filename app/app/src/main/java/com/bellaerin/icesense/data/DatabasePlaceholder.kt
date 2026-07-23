@@ -1,4 +1,4 @@
-package com.example.icesense.data
+package com.bellaerin.icesense.data
 
 /**
  * This package is reserved for future database implementation (e.g., Room, SQLite).

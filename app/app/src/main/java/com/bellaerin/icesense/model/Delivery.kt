@@ -1,4 +1,4 @@
-package com.example.icesense.model
+package com.bellaerin.icesense.model
 
 data class Delivery(
     val id: Int,

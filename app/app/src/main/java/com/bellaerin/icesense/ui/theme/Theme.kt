@@ -1,4 +1,4 @@
-package com.example.icesense.ui.theme
+package com.bellaerin.icesense.ui.theme
 
 import android.app.Activity
 import android.os.Build
