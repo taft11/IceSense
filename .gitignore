@@ -49,3 +49,7 @@ web/*.json
 .env
 .env*.local
 .env.production
+.artifacts
+.artifacts/
+app.artifacts/
+app.

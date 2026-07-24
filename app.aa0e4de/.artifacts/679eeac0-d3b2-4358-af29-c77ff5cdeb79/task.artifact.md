@@ -1,6 +1,0 @@
-- [ ] Create User model (`User.kt`)
-- [ ] Create `AboutUsScreen.kt`
-- [ ] Create `EditProfileScreen.kt`
-- [ ] Modify `MainActivity.kt` to implement Navigation Drawer
-- [ ] Update `DeliveryListScreen.kt` to use hamburger menu
-- [ ] Verify build and functionality
