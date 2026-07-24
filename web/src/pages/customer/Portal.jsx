@@ -9,6 +9,7 @@ import OrderView from './components/OrderView';
 import OrderHistoryView from './components/OrderHistoryView';
 import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
+import LocationPicker from './components/LocationPicker';
 
 const CART_STORAGE_KEY = 'icesense-cart-v1';
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
@@ -118,6 +119,8 @@ export default function CustomerPortal() {
     state: '',
     postalCode: '',
     country: '',
+    latitude: null,
+    longitude: null,
     isDefault: false,
   });
   const [addressEditingId, setAddressEditingId] = useState(null);
@@ -446,6 +449,7 @@ export default function CustomerPortal() {
 
     const payload = {
       ...accountInfo,
+      role: 'customer',
       email: currentUser.email || accountInfo.email || '',
       gender: accountInfo.gender || '',
       dateOfBirth: accountInfo.dateOfBirth || '',
@@ -501,6 +505,15 @@ export default function CustomerPortal() {
           deliverySlot: normalizedDeliverySlot,
           shippingAddress,
           landmark,
+          deliveryLatitude: defaultAddress?.latitude ?? null,
+          deliveryLongitude: defaultAddress?.longitude ?? null,
+          deliveryLocation:
+            defaultAddress?.latitude != null && defaultAddress?.longitude != null
+              ? {
+                  latitude: defaultAddress.latitude,
+                  longitude: defaultAddress.longitude,
+                }
+              : null,
           paymentMethod,
         };
 
@@ -556,6 +569,8 @@ export default function CustomerPortal() {
       state: '',
       postalCode: '',
       country: '',
+      latitude: null,
+      longitude: null,
       isDefault: false,
     });
   };
@@ -587,6 +602,8 @@ export default function CustomerPortal() {
         state: addressForm.state.trim(),
         postalCode: addressForm.postalCode.trim(),
         country: addressForm.country.trim(),
+        latitude: addressForm.latitude ?? null,
+        longitude: addressForm.longitude ?? null,
         label: addressForm.label.trim() || 'Home',
       };
 

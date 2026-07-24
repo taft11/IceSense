@@ -1,4 +1,5 @@
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import LocationPicker from './LocationPicker';
 
 export default function AccountView({
   accountSection,
@@ -226,6 +227,31 @@ export default function AccountView({
                   placeholder="Philippines"
                 />
               </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-700">Latitude</span>
+                <input
+                  readOnly
+                  value={addressForm.latitude ?? ''}
+                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-900"
+                  placeholder="Select a location on the map"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-gray-700">Longitude</span>
+                <input
+                  readOnly
+                  value={addressForm.longitude ?? ''}
+                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-900"
+                  placeholder="Select a location on the map"
+                />
+              </label>
+            </div>
+            <div className="mt-4">
+              <LocationPicker
+                latitude={addressForm.latitude}
+                longitude={addressForm.longitude}
+                onLocationChange={onAddressChange}
+              />
             </div>
 
             <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-gray-700">

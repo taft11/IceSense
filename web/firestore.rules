@@ -41,7 +41,13 @@ service cloud.firestore {
         && request.resource.data.role == 'customer';
 
       allow update: if isOwner(userId)
-        && request.resource.data.role == resource.data.role;
+        && (
+          request.resource.data.role == resource.data.role
+          || (
+            resource.data.role == null
+            && request.resource.data.role == 'customer'
+          )
+        );
 
       allow delete: if false;
     }
