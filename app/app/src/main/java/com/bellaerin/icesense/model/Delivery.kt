@@ -1,7 +1,7 @@
 package com.bellaerin.icesense.model
 
 data class Delivery(
-    val id: Int,
+    val id: String,
     val customerName: String,
     val address: String,
     val latitude: Double,

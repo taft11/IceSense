@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
@@ -55,8 +55,8 @@ import kotlin.math.roundToInt
 @Composable
 fun DeliveryListScreen(
     deliveries: List<Delivery>,
-    onConfirm: (Int, String?) -> Unit,
-    onLogout: () -> Unit
+    onConfirm: (String, String?) -> Unit,
+    onOpenMenu: () -> Unit
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -83,13 +83,13 @@ fun DeliveryListScreen(
     }
 
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    var currentDeliveryId by remember { mutableIntStateOf(-1) }
+    var currentDeliveryId by remember { mutableStateOf<String?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && tempPhotoUri != null && currentDeliveryId != -1) {
-            onConfirm(currentDeliveryId, tempPhotoUri.toString())
+        if (success && tempPhotoUri != null && currentDeliveryId != null) {
+            onConfirm(currentDeliveryId!!, tempPhotoUri.toString())
             Toast.makeText(context, "Delivery confirmed with proof", Toast.LENGTH_SHORT).show()
         }
     }
@@ -98,7 +98,7 @@ fun DeliveryListScreen(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasCameraPermission = isGranted
-        if (isGranted && currentDeliveryId != -1) {
+        if (isGranted && currentDeliveryId != null) {
             val uri = createImageUri(context)
             tempPhotoUri = uri
             cameraLauncher.launch(uri)
@@ -120,29 +120,29 @@ fun DeliveryListScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
         ) {
-            BellaErinLogo(iconSize = 56.dp, showText = false)
-            Spacer(modifier = Modifier.width(16.dp))
+            IconButton(onClick = onOpenMenu) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menu",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            BellaErinLogo(iconSize = 48.dp, showText = false)
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
                     text = "BELLA ERIN",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFF333333)
                 )
                 Text(
                     text = "TUBE ICE • Delivery",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = onLogout) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = "Logout",
-                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }
