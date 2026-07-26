@@ -37,7 +37,7 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
     map.on('click', (event) => {
       const lat = Number(event.latlng.lat.toFixed(6));
       const lng = Number(event.latlng.lng.toFixed(6));
-      markerRef.current.setLatLng([lat, lng]);
+      markerRef.current?.setLatLng([lat, lng]);
       map.setView([lat, lng]);
       onLocationChange('latitude', lat);
       onLocationChange('longitude', lng);
@@ -45,12 +45,24 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
 
     mapRef.current = map;
 
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      markerRef.current = null;
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
     };
-  }, [onLocationChange, latitude, longitude]);
+
+    window.addEventListener('resize', handleResize);
+    window.requestAnimationFrame(() => handleResize());
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (mapRef.current === map) {
+        map.remove();
+        mapRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, [onLocationChange]);
 
   useEffect(() => {
     if (!mapRef.current || latitude == null || longitude == null) return;

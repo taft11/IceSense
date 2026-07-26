@@ -25,6 +25,7 @@ export default function CartSidebar({
   isDeliveryExpanded,
   onToggleDelivery,
   isCheckoutConfirmOpen,
+  hasAddress,
 }) {
   return (
     <div className={`fixed inset-0 z-40 transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -264,6 +265,11 @@ export default function CartSidebar({
             <span>Total</span>
             <span>₱{cartSubtotal.toFixed(2)}</span>
           </div>
+          {!hasAddress && (
+            <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Add a delivery address first to continue checkout.
+            </div>
+          )}
           <button
             type="button"
             onClick={onCheckout}

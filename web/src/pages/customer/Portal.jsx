@@ -161,6 +161,7 @@ export default function CustomerPortal() {
   const activeStock = Math.max(0, (stocks[selectedProductId] || 0) - cartItems.filter((item) => item.productId === selectedProductId).reduce((sum, item) => sum + item.quantity, 0));
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const hasSavedAddress = addresses.length > 0;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -463,12 +464,26 @@ export default function CustomerPortal() {
     return payload;
   };
 
+  const redirectToAddressSetup = (message = 'Please add a delivery address before placing your order.') => {
+    setAccountSection('addresses');
+    setAccountMessage(message);
+    setAccountError('');
+    setIsCheckoutConfirmOpen(false);
+    setIsCartOpen(false);
+    navigate('/portal/account');
+  };
+
   const handleOrder = () => {
     if (cartItems.length === 0) return;
 
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setOrdersError('Please sign in to place an order.');
+      return;
+    }
+
+    if (!hasSavedAddress) {
+      redirectToAddressSetup();
       return;
     }
 
@@ -543,6 +558,10 @@ export default function CustomerPortal() {
 
   const openCheckoutConfirmation = () => {
     if (cartItems.length === 0) return;
+    if (!hasSavedAddress) {
+      redirectToAddressSetup();
+      return;
+    }
     setIsCheckoutConfirmOpen(true);
   };
 
@@ -607,10 +626,14 @@ export default function CustomerPortal() {
         label: addressForm.label.trim() || 'Home',
       };
 
-      if (normalizedAddress.isDefault) {
+      const hasExistingDefault = nextAddresses.some((address) => address.isDefault);
+      const shouldSetAsDefault = normalizedAddress.isDefault || nextAddresses.length === 0 || !hasExistingDefault;
+
+      if (shouldSetAsDefault) {
         nextAddresses.forEach((address) => {
           address.isDefault = false;
         });
+        normalizedAddress.isDefault = true;
       }
 
       const existingIndex = nextAddresses.findIndex((address) => address.id === normalizedAddress.id);
@@ -832,6 +855,7 @@ export default function CustomerPortal() {
         isDeliveryExpanded={isDeliveryExpanded}
         onToggleDelivery={() => setIsDeliveryExpanded((prev) => !prev)}
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
+        hasAddress={hasSavedAddress}
       />
     </div>
   );
