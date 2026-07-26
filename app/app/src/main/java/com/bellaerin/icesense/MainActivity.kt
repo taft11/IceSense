@@ -85,24 +85,82 @@ fun DeliveryApp() {
 
     LaunchedEffect(currentScreen) {
         if (currentScreen == "list" || currentScreen == "splash") {
-            val listener = firestore.collection("orders")
+            firestore.collection("orders")
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) return@addSnapshotListener
                     if (snapshot != null) {
-                        deliveries = snapshot.documents.map { doc ->
-                            Delivery(
-                                id = doc.id,
-                                customerName = doc.getString("customerName") ?: "Unknown",
-                                address = doc.getString("address") ?: "No Address",
-                                latitude = doc.getDouble("latitude") ?: 0.0,
-                                longitude = doc.getDouble("longitude") ?: 0.0,
-                                isConfirmed = doc.getBoolean("isConfirmed") ?: false,
-                                proofImageUri = doc.getString("proofImageUri")
-                            )
+                        val orderDocs = snapshot.documents
+                        if (orderDocs.isEmpty()) {
+                            deliveries = emptyList()
+                            return@addSnapshotListener
+                        }
+
+                        val newDeliveriesMap = mutableMapOf<String, Delivery>()
+                        var fetchedCount = 0
+
+                        orderDocs.forEach { doc ->
+                            val userId = doc.getString("userId")
+                            val isConfirmed = doc.getBoolean("isConfirmed") ?: false
+                            val proofImageUri = doc.getString("proofImageUri")
+
+                            if (userId != null) {
+                                firestore.collection("users").document(userId)
+                                    .get().addOnSuccessListener { userDoc ->
+                                        val firstName = userDoc.getString("firstName") ?: ""
+                                        val lastName = userDoc.getString("lastName") ?: ""
+                                        val customerName = "$firstName $lastName".trim().ifEmpty { "Customer" }
+                                        
+                                        val defaultAddressId = userDoc.getString("defaultAddressId")
+                                        val addresses = userDoc.get("addresses") as? List<Map<String, Any>>
+                                        val addr = addresses?.find { it["id"] == defaultAddressId }
+                                        
+                                        val street = addr?.get("street") as? String ?: ""
+                                        val city = addr?.get("city") as? String ?: ""
+                                        val state = addr?.get("state") as? String ?: ""
+                                        val fullAddress = listOf(street, city, state)
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(", ")
+                                        
+                                        val lat = when(val l = addr?.get("latitude")) {
+                                            is Double -> l
+                                            is Number -> l.toDouble()
+                                            else -> 0.0
+                                        }
+                                        val lng = when(val l = addr?.get("longitude")) {
+                                            is Double -> l
+                                            is Number -> l.toDouble()
+                                            else -> 0.0
+                                        }
+
+                                        newDeliveriesMap[doc.id] = Delivery(
+                                            id = doc.id,
+                                            customerName = customerName,
+                                            address = fullAddress.ifEmpty { "No Address" },
+                                            latitude = lat,
+                                            longitude = lng,
+                                            isConfirmed = isConfirmed,
+                                            proofImageUri = proofImageUri
+                                        )
+
+                                        fetchedCount++
+                                        if (fetchedCount == orderDocs.size) {
+                                            deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                        }
+                                    }.addOnFailureListener {
+                                        fetchedCount++
+                                        if (fetchedCount == orderDocs.size) {
+                                            deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                        }
+                                    }
+                            } else {
+                                fetchedCount++
+                                if (fetchedCount == orderDocs.size) {
+                                    deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                }
+                            }
                         }
                     }
                 }
-            // In a real app, you'd want to dispose this listener
         }
     }
 
