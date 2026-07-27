@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Bell, ClipboardList, Boxes, Route as RouteIcon, Menu } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
-import { collection, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 import Overview from './Overview';
@@ -34,9 +34,12 @@ export default function AdminDashboard() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [ordersPage, setOrdersPage] = useState(1);
-  const [confirmingOrderId, setConfirmingOrderId] = useState(null);
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [pendingOrder, setPendingOrder] = useState(null);
+  const [verificationLoadingId, setVerificationLoadingId] = useState(null);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedRejectOrder, setSelectedRejectOrder] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [adminUid, setAdminUid] = useState(null);
 
   const ORDERS_PER_PAGE = 6;
 
@@ -52,10 +55,11 @@ export default function AdminDashboard() {
     return date.toLocaleString();
   };
 
-  const totalOrderPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
-  const paginatedOrders = allOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
-  const pendingOrders = allOrders.filter((order) => (order.status || '').toLowerCase() === 'placed').length;
-  const completedOrders = allOrders.filter((order) => (order.status || '').toLowerCase() === 'completed').length;
+  const pendingPaymentOrders = allOrders.filter((order) => order.paymentStatus === 'PENDING_PAYMENT_VERIFICATION');
+  const totalOrderPages = Math.max(1, Math.ceil(pendingPaymentOrders.length / ORDERS_PER_PAGE));
+  const paginatedOrders = pendingPaymentOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
+  const pendingOrders = pendingPaymentOrders.length;
+  const completedOrders = allOrders.filter((order) => order.paymentStatus === 'PAID' || (order.status || '').toLowerCase() === 'completed').length;
 
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
@@ -99,6 +103,8 @@ export default function AdminDashboard() {
           navigate('/admin-login', { replace: true });
           return;
         }
+
+        setAdminUid(user.uid);
       } catch (error) {
         console.error('Unable to verify admin access', error);
         await signOut(auth);
@@ -149,30 +155,62 @@ export default function AdminDashboard() {
     }
   };
 
-  const openConfirmModal = (order) => {
-    setPendingOrder(order);
-    setConfirmModalOpen(true);
+  const openReceiptPreview = (receiptUrl) => {
+    setReceiptPreviewUrl(receiptUrl);
   };
 
-  const closeConfirmModal = () => {
-    setConfirmModalOpen(false);
-    setPendingOrder(null);
+  const closeReceiptPreview = () => {
+    setReceiptPreviewUrl(null);
   };
 
-  const handleConfirmOrder = async () => {
-    if (!pendingOrder?.id) return;
+  const openRejectModal = (order) => {
+    setSelectedRejectOrder(order);
+    setRejectReason('');
+    setRejectModalOpen(true);
+  };
 
+  const closeRejectModal = () => {
+    setRejectModalOpen(false);
+    setSelectedRejectOrder(null);
+    setRejectReason('');
+  };
+
+  const handleApprovePayment = async (order) => {
+    if (!order?.id) return;
     try {
-      setConfirmingOrderId(pendingOrder.id);
-      await updateDoc(doc(db, 'orders', pendingOrder.id), {
-        status: 'Confirmed',
+      setVerificationLoadingId(order.id);
+      await updateDoc(doc(db, 'orders', order.id), {
+        paymentStatus: 'PAID',
+        status: 'Processing',
+        verifiedAt: serverTimestamp(),
+        verifiedBy: adminUid || null,
+        adminNotes: '',
       });
-      closeConfirmModal();
     } catch (error) {
-      console.error('Unable to confirm order', error);
-      setOrdersError('Unable to confirm order right now.');
+      console.error('Unable to approve payment', error);
+      setOrdersError('Unable to approve payment right now.');
     } finally {
-      setConfirmingOrderId(null);
+      setVerificationLoadingId(null);
+    }
+  };
+
+  const handleRejectPayment = async () => {
+    if (!selectedRejectOrder?.id) return;
+    try {
+      setVerificationLoadingId(selectedRejectOrder.id);
+      await updateDoc(doc(db, 'orders', selectedRejectOrder.id), {
+        paymentStatus: 'REJECTED',
+        status: 'Rejected',
+        verifiedAt: serverTimestamp(),
+        verifiedBy: adminUid || null,
+        adminNotes: rejectReason || 'No reason provided.',
+      });
+      closeRejectModal();
+    } catch (error) {
+      console.error('Unable to reject payment', error);
+      setOrdersError('Unable to reject payment right now.');
+    } finally {
+      setVerificationLoadingId(null);
     }
   };
 
@@ -241,7 +279,6 @@ export default function AdminDashboard() {
               path="orders"
               element={
                 <Orders
-                  allOrders={allOrders}
                   ordersLoading={ordersLoading}
                   ordersError={ordersError}
                   paginatedOrders={paginatedOrders}
@@ -250,9 +287,11 @@ export default function AdminDashboard() {
                   ordersPage={ordersPage}
                   totalOrderPages={totalOrderPages}
                   setOrdersPage={setOrdersPage}
-                  openConfirmModal={openConfirmModal}
-                  confirmingOrderId={confirmingOrderId}
                   formatDate={formatDate}
+                  verificationLoadingId={verificationLoadingId}
+                  onApprovePayment={handleApprovePayment}
+                  onOpenReceiptPreview={openReceiptPreview}
+                  onOpenRejectModal={openRejectModal}
                 />
               }
             />
@@ -264,33 +303,47 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {confirmModalOpen && pendingOrder && (
+      {receiptPreviewUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4 py-8">
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <button
+              onClick={closeReceiptPreview}
+              className="absolute right-4 top-4 rounded-full bg-white p-3 text-gray-500 shadow hover:bg-gray-50"
+            >
+              ×
+            </button>
+            <img src={receiptPreviewUrl} alt="Receipt preview" className="h-[80vh] w-full object-contain bg-gray-100" />
+          </div>
+        </div>
+      )}
+
+      {rejectModalOpen && selectedRejectOrder && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-[#4091c9]">
-              <ClipboardList className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">Confirm this order?</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              This will mark order <span className="font-semibold text-gray-900">#{pendingOrder.id?.slice(0, 8).toUpperCase()}</span> as <span className="font-semibold text-[#4091c9]">Confirmed</span>.
+            <h3 className="text-xl font-bold text-gray-900">Reject Payment</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Provide a reason why payment for order <span className="font-semibold">#{selectedRejectOrder.id?.slice(0, 8).toUpperCase()}</span> is rejected.
             </p>
-            <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-600">
-              <p className="font-semibold text-gray-800">Customer</p>
-              <p className="mt-1">{pendingOrder.customerName || 'Unknown customer'}</p>
-            </div>
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <textarea
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              rows={4}
+              className="mt-4 w-full rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 outline-none focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+              placeholder="Reason for rejection (e.g. blurry screenshot, amount mismatch)"
+            />
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
-                onClick={closeConfirmModal}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                onClick={closeRejectModal}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleConfirmOrder}
-                disabled={confirmingOrderId === pendingOrder.id}
-                className="rounded-xl bg-[#4091c9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-blue-300"
+                onClick={handleRejectPayment}
+                disabled={verificationLoadingId === selectedRejectOrder.id}
+                className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
               >
-                {confirmingOrderId === pendingOrder.id ? 'Confirming...' : 'Yes, confirm'}
+                {verificationLoadingId === selectedRejectOrder.id ? 'Rejecting...' : 'Reject Payment'}
               </button>
             </div>
           </div>

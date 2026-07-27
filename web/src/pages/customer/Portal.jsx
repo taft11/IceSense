@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import { auth, db } from '../../services/firebase';
+import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { auth, db, storage } from '../../services/firebase';
 import { PRODUCTS } from './data/products';
 import HeaderNav from './components/HeaderNav';
 import OrderView from './components/OrderView';
@@ -145,6 +146,8 @@ export default function CustomerPortal() {
   });
   const [isDeliveryExpanded, setIsDeliveryExpanded] = useState(false);
   const [isCheckoutConfirmOpen, setIsCheckoutConfirmOpen] = useState(false);
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptError, setReceiptError] = useState('');
 
   const earliestDeliveryDate = useMemo(() => getEarliestDeliveryDate(), []);
   const maxDeliveryDate = useMemo(() => addDays(new Date(), 14), []);
@@ -473,7 +476,7 @@ export default function CustomerPortal() {
     navigate('/portal/account');
   };
 
-  const handleOrder = () => {
+const handleOrder = async () => {
     if (cartItems.length === 0) return;
 
     const currentUser = auth.currentUser;
@@ -487,6 +490,11 @@ export default function CustomerPortal() {
       return;
     }
 
+    if (!receiptFile) {
+      setReceiptError('Please upload a GCash receipt screenshot before placing your order.');
+      return;
+    }
+
     const fullName = getFullName();
     const normalizedDeliveryDate = deliveryDate || toDateInputValue(earliestDeliveryDate);
     const normalizedDeliverySlot = DELIVERY_TIME_SLOTS.find((slot) => slot.id === deliverySlot)?.label || DELIVERY_TIME_SLOTS[0].label;
@@ -495,13 +503,19 @@ export default function CustomerPortal() {
       ? `${defaultAddress.street || ''}, ${defaultAddress.city || ''}, ${defaultAddress.state || ''} ${defaultAddress.postalCode || ''}`.replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim()
       : 'Address not provided yet';
     const landmark = defaultAddress?.landmark || 'Not provided';
-    const paymentMethod = 'Cash on Delivery';
+    const paymentMethod = 'GCash';
 
     setOrderStatus('processing');
+    setReceiptError('');
 
     setTimeout(async () => {
       try {
         const ordersRef = collection(db, 'orders');
+
+        const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
+        await uploadBytes(receiptRef, receiptFile);
+        const receiptUrl = await getDownloadURL(receiptRef);
+
         const orderPayload = {
           userId: currentUser.uid,
           items: cartItems.map((item) => ({
@@ -511,7 +525,13 @@ export default function CustomerPortal() {
             price: item.price,
           })),
           total: cartSubtotal,
-          status: 'Placed',
+          status: 'Pending Payment Verification',
+          paymentMethod,
+          paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+          receiptUrl,
+          adminNotes: '',
+          verifiedAt: null,
+          verifiedBy: null,
           createdAt: serverTimestamp(),
           customerName: fullName || currentUser.displayName || currentUser.email || 'Customer',
           customerEmail: currentUser.email || '',
@@ -529,7 +549,6 @@ export default function CustomerPortal() {
                   longitude: defaultAddress.longitude,
                 }
               : null,
-          paymentMethod,
         };
 
         await addDoc(ordersRef, orderPayload);
@@ -543,6 +562,7 @@ export default function CustomerPortal() {
         });
 
         setCartItems([]);
+        setReceiptFile(null);
         setOrderStatus('success');
         setQuantity(1);
         setOrdersError('');
@@ -562,6 +582,7 @@ export default function CustomerPortal() {
       redirectToAddressSetup();
       return;
     }
+    setReceiptError('');
     setIsCheckoutConfirmOpen(true);
   };
 
@@ -842,7 +863,10 @@ export default function CustomerPortal() {
         onRemoveItem={removeFromCart}
         onCheckout={openCheckoutConfirmation}
         onConfirmCheckout={confirmCheckoutOrder}
-        onCancelCheckout={() => setIsCheckoutConfirmOpen(false)}
+        onCancelCheckout={() => {
+          setIsCheckoutConfirmOpen(false);
+          setReceiptFile(null);
+        }}
         getRemainingStock={getRemainingStockForProduct}
         deliveryDate={deliveryDate}
         onDeliveryDateChange={setDeliveryDate}
@@ -856,6 +880,9 @@ export default function CustomerPortal() {
         onToggleDelivery={() => setIsDeliveryExpanded((prev) => !prev)}
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
         hasAddress={hasSavedAddress}
+        receiptFile={receiptFile}
+        onReceiptFileChange={setReceiptFile}
+        receiptError={receiptError}
       />
     </div>
   );

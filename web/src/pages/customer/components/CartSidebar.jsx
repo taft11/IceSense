@@ -26,6 +26,9 @@ export default function CartSidebar({
   onToggleDelivery,
   isCheckoutConfirmOpen,
   hasAddress,
+  receiptFile,
+  onReceiptFileChange,
+  receiptError,
 }) {
   return (
     <div className={`fixed inset-0 z-40 transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -66,6 +69,49 @@ export default function CartSidebar({
                 </div>
               </div>
 
+              <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-center gap-3 text-sm font-semibold text-gray-800">
+                  <ShoppingCart className="h-4 w-4 text-[#4091c9]" />
+                  GCash Payment Instructions
+                </div>
+                <div className="grid gap-3 text-sm text-gray-700">
+                  <div className="rounded-2xl border border-gray-200 bg-slate-50 p-3">
+                    <p className="font-semibold text-gray-900">Pay via GCash</p>
+                    <p className="mt-1 text-gray-600">Use the QR code below and upload your receipt screenshot to complete checkout.</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-[180px_auto] items-center">
+                    <a
+                      href="/gcash-qr.png"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                    >
+                      <img
+                        src="/gcash-qr.png"
+                        alt="GCash QR code"
+                        className="h-40 w-full max-w-[180px] object-contain"
+                      />
+                    </a>
+                    <div className="space-y-1 text-sm text-gray-700">
+                      <p className="font-semibold text-gray-900">GCash Account</p>
+                      <p>Account Name: Bella Erin Tube Ice</p>
+                      <p>GCash Number: 0917-123-4567</p>
+                    </div>
+                  </div>
+                  <label className="block text-sm font-semibold text-gray-800" htmlFor="receiptUpload">
+                    Upload receipt screenshot
+                  </label>
+                  <input
+                    id="receiptUpload"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => onReceiptFileChange(event.target.files?.[0] || null)}
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+                  />
+                  {receiptError && <p className="text-sm text-red-600">{receiptError}</p>}
+                </div>
+              </div>
+
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -77,7 +123,8 @@ export default function CartSidebar({
                 <button
                   type="button"
                   onClick={onConfirmCheckout}
-                  className="flex-1 rounded-2xl bg-[#4091c9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+                  disabled={!receiptFile}
+                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${receiptFile ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'bg-slate-300 text-slate-600 cursor-not-allowed'}`}
                 >
                   Place Order
                 </button>
