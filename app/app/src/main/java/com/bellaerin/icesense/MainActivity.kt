@@ -4,7 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -16,9 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.bellaerin.icesense.model.Delivery
 import com.bellaerin.icesense.model.User
 import com.bellaerin.icesense.ui.components.BellaErinLogo
@@ -27,6 +31,7 @@ import com.bellaerin.icesense.ui.screens.DeliveryListScreen
 import com.bellaerin.icesense.ui.screens.EditProfileScreen
 import com.bellaerin.icesense.ui.screens.LoginScreen
 import com.bellaerin.icesense.ui.theme.IceSenseTheme
+import com.bellaerin.icesense.utils.uploadProofImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -51,6 +56,8 @@ fun DeliveryApp() {
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val firestore = remember { FirebaseFirestore.getInstance() }
+    val context = LocalContext.current
+    var isUploading by remember { mutableStateOf(false) }
 
     fun fetchUserProfile(uid: String, email: String) {
         firestore.collection("users").document(uid)
@@ -270,11 +277,33 @@ fun DeliveryApp() {
                     "list" -> DeliveryListScreen(
                         deliveries = deliveries,
                         onConfirm = { id, proofUri ->
-                            firestore.collection("orders").document(id)
-                                .update(
-                                    "isConfirmed", true,
-                                    "proofImageUri", proofUri
-                                )
+                            if (proofUri != null) {
+                                scope.launch {
+                                    isUploading = true
+                                    val downloadUrl = uploadProofImage(id, proofUri.toUri())
+                                    if (downloadUrl != null) {
+                                        firestore.collection("orders").document(id)
+                                            .update(
+                                                "isConfirmed", true,
+                                                "proofImageUri", downloadUrl
+                                            ).addOnCompleteListener {
+                                                isUploading = false
+                                                if (it.isSuccessful) {
+                                                    Toast.makeText(context, "Delivery confirmed!", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    Toast.makeText(context, "Firestore update failed", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                    } else {
+                                        isUploading = false
+                                        Toast.makeText(context, "Image upload failed", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else {
+                                // No photo confirm (if allowed)
+                                firestore.collection("orders").document(id)
+                                    .update("isConfirmed", true)
+                            }
                         },
                         onOpenMenu = {
                             scope.launch { drawerState.open() }
@@ -292,6 +321,22 @@ fun DeliveryApp() {
                     "about" -> AboutUsScreen(
                         onBack = { currentScreen = "list" }
                     )
+                }
+            }
+        }
+        
+        if (isUploading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Uploading proof...", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
