@@ -1,5 +1,6 @@
 package com.bellaerin.icesense
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,11 +8,14 @@ import androidx.activity.enableEdgeToEdge
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,15 +45,31 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            IceSenseTheme {
-                DeliveryApp()
+            val context = LocalContext.current
+            val prefs = remember { context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE) }
+            val systemTheme = isSystemInDarkTheme()
+            var isDarkMode by remember { 
+                mutableStateOf(prefs.getBoolean("is_dark_mode", systemTheme)) 
+            }
+
+            IceSenseTheme(darkTheme = isDarkMode) {
+                DeliveryApp(
+                    isDarkMode = isDarkMode,
+                    onThemeToggle = {
+                        isDarkMode = !isDarkMode
+                        prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun DeliveryApp() {
+fun DeliveryApp(
+    isDarkMode: Boolean,
+    onThemeToggle: () -> Unit
+) {
     val auth = remember { FirebaseAuth.getInstance() }
     var currentScreen by remember { mutableStateOf("splash") }
     var currentUserProfile by remember { mutableStateOf<User?>(null) }
@@ -248,6 +268,31 @@ fun DeliveryApp() {
                         scope.launch { drawerState.close() }
                     },
                     icon = { Icon(Icons.Default.Info, contentDescription = null) },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp))
+
+                NavigationDrawerItem(
+                    label = { Text(if (isDarkMode) "Dark Mode" else "Light Mode") },
+                    selected = false,
+                    onClick = onThemeToggle,
+                    icon = { 
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode, 
+                            contentDescription = null
+                        ) 
+                    },
+                    badge = {
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = { onThemeToggle() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                            )
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
