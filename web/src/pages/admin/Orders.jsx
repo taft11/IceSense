@@ -7,36 +7,90 @@ export default function Orders({
   ordersError,
   paginatedOrders,
   pendingOrders,
+  processingOrders,
+  deliveredOrders,
+  cancelledOrders,
   completedOrders,
   ordersPage,
   totalOrderPages,
   setOrdersPage,
+  activeOrderFilter,
+  setActiveOrderFilter,
   formatDate,
   verificationLoadingId,
   onApprovePayment,
   onOpenReceiptPreview,
   onOpenRejectModal,
 }) {
+  const filterOptions = [
+    { key: 'pending_payment', label: 'Pending Payment Verification', count: pendingOrders },
+    { key: 'processing', label: 'Processing', count: processingOrders },
+    { key: 'delivered', label: 'Delivered', count: deliveredOrders },
+    { key: 'cancelled', label: 'Rejected / Cancelled', count: cancelledOrders },
+  ];
+
+  const getStatusBadge = (order) => {
+    const normalizedStatus = (order.status || '').toLowerCase();
+    const paymentStatus = (order.paymentStatus || '').toLowerCase();
+
+    if (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') {
+      return { label: 'Pending Payment Verification', className: 'bg-yellow-100 text-yellow-700' };
+    }
+
+    if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
+      return { label: 'Cancelled', className: 'bg-red-100 text-red-700' };
+    }
+
+    if (
+      normalizedStatus === 'delivered' ||
+      normalizedStatus === 'completed' ||
+      normalizedStatus === 'done' ||
+      normalizedStatus === 'finished' ||
+      normalizedStatus === 'delivery completed' ||
+      paymentStatus === 'delivered'
+    ) {
+      return { label: 'Delivered', className: 'bg-green-100 text-green-700' };
+    }
+
+    if (normalizedStatus === 'processing' || paymentStatus === 'paid') {
+      return { label: 'Processing', className: 'bg-blue-100 text-blue-700' };
+    }
+
+    return { label: 'Pending Payment Verification', className: 'bg-yellow-100 text-yellow-700' };
+  };
+
   return (
     <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Pending Payment Verification</h2>
-          <p className="mt-2 text-gray-600">Review uploaded GCash receipts and approve or reject payments.</p>
+          <h2 className="text-2xl font-bold text-gray-800">Orders</h2>
+          <p className="mt-2 text-gray-600">Review orders by status and manage payment verification when needed.</p>
         </div>
         <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-[#4091c9]">
-          {pendingOrders} pending orders
+          {completedOrders} completed orders
         </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        {filterOptions.map((filter) => (
+          <button
+            key={filter.key}
+            onClick={() => setActiveOrderFilter(filter.key)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeOrderFilter === filter.key ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          >
+            {filter.label} ({filter.count})
+          </button>
+        ))}
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-          <p className="font-semibold text-gray-800">Pending payment verifications</p>
-          <p className="mt-1 text-sm text-gray-600">{paginatedOrders.length} orders awaiting review.</p>
+          <p className="font-semibold text-gray-800">Current view</p>
+          <p className="mt-1 text-sm text-gray-600">{paginatedOrders.length} orders shown in this status group.</p>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <p className="font-semibold text-gray-800">Completed</p>
-          <p className="mt-1 text-sm text-gray-600">{completedOrders} orders marked completed.</p>
+          <p className="mt-1 text-sm text-gray-600">{completedOrders} orders in processing or delivered.</p>
         </div>
       </div>
 
@@ -49,7 +103,7 @@ export default function Orders({
       {ordersLoading ? (
         <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">Loading orders...</div>
       ) : paginatedOrders.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-600">No pending receipt verifications at the moment.</div>
+        <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-600">No orders in this status group yet.</div>
       ) : (
         <>
           <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200">
@@ -101,28 +155,32 @@ export default function Orders({
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-                          {order.paymentStatus || 'Pending'}
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(order).className}`}>
+                          {getStatusBadge(order).label}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{formatDate(order.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                          <button
-                            onClick={() => onApprovePayment(order)}
-                            disabled={verificationLoadingId === order.id}
-                            className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
-                          >
-                            {verificationLoadingId === order.id ? 'Approving...' : 'Approve'}
-                          </button>
-                          <button
-                            onClick={() => onOpenRejectModal(order)}
-                            disabled={verificationLoadingId === order.id}
-                            className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
-                          >
-                            Reject
-                          </button>
-                        </div>
+                        {getStatusBadge(order).label === 'Pending Payment Verification' ? (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            <button
+                              onClick={() => onApprovePayment(order)}
+                              disabled={verificationLoadingId === order.id}
+                              className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                            >
+                              {verificationLoadingId === order.id ? 'Approving...' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => onOpenRejectModal(order)}
+                              disabled={verificationLoadingId === order.id}
+                              className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

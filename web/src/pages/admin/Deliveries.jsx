@@ -1,18 +1,261 @@
+import { useEffect, useState } from 'react';
+import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+
+const DRIVER_ROLES = ['driver', 'delivery', 'deliverer'];
+const FILTERS = {
+  all: 'All orders',
+  unassigned: 'Unassigned',
+  assigned: 'Assigned',
+};
+
 export default function Deliveries() {
+  const [orders, setOrders] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [userProfiles, setUserProfiles] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [savingOrderId, setSavingOrderId] = useState(null);
+  const [error, setError] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ORDERS_PER_PAGE = 6;
+
+  useEffect(() => {
+    const unsubscribeOrders = onSnapshot(
+      collection(db, 'orders'),
+      (snapshot) => {
+        const parsedOrders = snapshot.docs
+          .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+          .sort((a, b) => (b.createdAt?.toMillis?.() || b.createdAt || 0) - (a.createdAt?.toMillis?.() || a.createdAt || 0));
+
+        setOrders(parsedOrders);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Unable to load orders', err);
+        setError('Unable to load orders right now.');
+        setLoading(false);
+      }
+    );
+
+    const unsubscribeUsers = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const parsedUsers = snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+        const profilesMap = parsedUsers.reduce((accumulator, user) => {
+          accumulator[user.id] = user;
+          return accumulator;
+        }, {});
+        const parsedDrivers = parsedUsers.filter((user) => DRIVER_ROLES.includes((user.role || '').toLowerCase().trim()));
+
+        setUserProfiles(profilesMap);
+        setDrivers(parsedDrivers);
+      },
+      (err) => {
+        console.error('Unable to load drivers', err);
+      }
+    );
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeUsers();
+    };
+  }, []);
+
+  const handleAssignDriver = async (orderId, driverId) => {
+    if (!orderId) return;
+
+    const selectedDriver = drivers.find((driver) => driver.id === driverId);
+
+    try {
+      setSavingOrderId(orderId);
+      setError('');
+
+      await updateDoc(doc(db, 'orders', orderId), {
+        assignedDriverId: driverId || null,
+        assignedDriverName: selectedDriver?.fullName || selectedDriver?.name || selectedDriver?.displayName || '',
+        assignedDriverEmail: selectedDriver?.email || '',
+        deliveryStatus: driverId ? 'Assigned' : 'Unassigned',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error('Unable to assign driver', err);
+      setError('Unable to assign a driver right now.');
+    } finally {
+      setSavingOrderId(null);
+    }
+  };
+
+  const assignedOrders = orders.filter((order) => order.assignedDriverId).length;
+  const visibleOrders = orders.filter((order) => {
+    if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
+    if (activeFilter === 'unassigned') return !order.assignedDriverId;
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDERS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedOrders = visibleOrders.slice((safePage - 1) * ORDERS_PER_PAGE, safePage * ORDERS_PER_PAGE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
+
+  const resolveOrderAddress = (order) => {
+    if (order.shippingAddress) return order.shippingAddress;
+    if (order.address) return order.address;
+    if (order.deliveryAddress) return order.deliveryAddress;
+
+    const userProfile = userProfiles[order.userId];
+    if (!userProfile) return 'No delivery address provided';
+
+    const addresses = Array.isArray(userProfile.addresses) ? userProfile.addresses : [];
+    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+
+    if (defaultAddress) {
+      const parts = [defaultAddress.street, defaultAddress.city, defaultAddress.state, defaultAddress.postalCode, defaultAddress.country].filter(Boolean);
+      return parts.join(', ');
+    }
+
+    if (userProfile.address) return userProfile.address;
+    if (userProfile.shippingAddress) return userProfile.shippingAddress;
+
+    return 'No delivery address provided';
+  };
+
   return (
     <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
-      <h2 className="text-2xl font-bold text-gray-800">Deliveries</h2>
-      <p className="mt-2 text-gray-600">Track active routes and delivery status.</p>
-      <div className="mt-6 space-y-4">
-        <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
-          <p className="font-semibold text-purple-800">Route 01</p>
-          <p className="mt-1 text-sm text-purple-700">On the way to Barangay San Pedro.</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Delivery assignments</h2>
+          <p className="mt-2 text-gray-600">Assign orders to specific Drivers</p>
         </div>
-        <div className="rounded-2xl border border-yellow-100 bg-yellow-50 p-4">
-          <p className="font-semibold text-yellow-800">Route 02</p>
-          <p className="mt-1 text-sm text-yellow-700">Scheduled for departure in 20 minutes.</p>
+        <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <p className="font-semibold">{assignedOrders} assigned / {orders.length} orders</p>
         </div>
       </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        {Object.entries(FILTERS).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveFilter(key)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeFilter === key ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+          Loading orders...
+        </div>
+      ) : visibleOrders.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-600">
+          No orders in this view yet.
+        </div>
+      ) : (
+        <>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Order</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Address</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Driver</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {paginatedOrders.map((order) => {
+                    const orderAddress = resolveOrderAddress(order);
+
+                    return (
+                      <tr key={order.id} className="align-top">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-800">#{order.id?.slice(0, 8).toUpperCase()}</p>
+                          <p className="mt-1 text-xs text-gray-500">{order.createdAt ? 'Placed recently' : 'No date'}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-800">{order.customerName || 'Unknown customer'}</p>
+                          <p className="text-xs text-gray-500">{order.customerEmail || 'No email'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {orderAddress}
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={order.assignedDriverId || ''}
+                            onChange={(event) => handleAssignDriver(order.id, event.target.value)}
+                            disabled={drivers.length === 0 || savingOrderId === order.id}
+                            className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#4091c9]"
+                          >
+                            <option value="">Select driver</option>
+                            {drivers.map((driver) => (
+                              <option key={driver.id} value={driver.id}>
+                                {driver.fullName || driver.name || driver.displayName || driver.email || driver.id}
+                              </option>
+                            ))}
+                          </select>
+                          {order.assignedDriverName && (
+                            <p className="mt-2 text-xs text-gray-500">Assigned: {order.assignedDriverName}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-2">
+                            <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${order.assignedDriverId ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {order.deliveryStatus || (order.assignedDriverId ? 'Assigned' : 'Unassigned')}
+                            </span>
+                            <button
+                              onClick={() => handleAssignDriver(order.id, order.assignedDriverId || '')}
+                              disabled={drivers.length === 0 || savingOrderId === order.id}
+                              className="w-fit rounded-lg bg-[#4091c9] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-slate-300"
+                            >
+                              {savingOrderId === order.id ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              Showing {Math.min((safePage - 1) * ORDERS_PER_PAGE + 1, visibleOrders.length)}-{Math.min(safePage * ORDERS_PER_PAGE, visibleOrders.length)} of {visibleOrders.length} orders
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safePage === 1}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <span className="text-sm font-semibold text-gray-700">Page {safePage} of {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={safePage === totalPages}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

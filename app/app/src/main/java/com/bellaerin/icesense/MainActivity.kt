@@ -2,6 +2,7 @@ package com.bellaerin.icesense
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -148,15 +149,31 @@ fun DeliveryApp(
                             val status = doc.getString("status") ?: ""
 
                             if (userId != null) {
+                                Log.d("IceSense", "Fetching user $userId for order ${doc.id}")
                                 firestore.collection("users").document(userId)
                                     .get().addOnSuccessListener { userDoc ->
+                                        if (!userDoc.exists()) {
+                                            Log.e("IceSense", "User document $userId does not exist!")
+                                        }
+
                                         val firstName = userDoc.getString("firstName") ?: ""
                                         val lastName = userDoc.getString("lastName") ?: ""
                                         val customerName = "$firstName $lastName".trim().ifEmpty { "Customer" }
                                         
                                         val defaultAddressId = userDoc.getString("defaultAddressId")
                                         val addresses = userDoc.get("addresses") as? List<Map<String, Any>>
-                                        val addr = addresses?.find { it["id"] == defaultAddressId }
+                                        
+                                        Log.d("IceSense", "User $customerName has ${addresses?.size ?: 0} addresses. Default ID: $defaultAddressId")
+
+                                        // Try to find the default address, fallback to the first one if not found
+                                        val addr = addresses?.find { it["id"] == defaultAddressId } 
+                                            ?: addresses?.firstOrNull()
+                                        
+                                        if (addr == null) {
+                                            Log.w("IceSense", "No address found for user $userId")
+                                        } else {
+                                            Log.d("IceSense", "Found address: ${addr["street"]}, ID matched: ${addr["id"] == defaultAddressId}")
+                                        }
                                         
                                         val street = addr?.get("street") as? String ?: ""
                                         val city = addr?.get("city") as? String ?: ""
@@ -191,13 +208,15 @@ fun DeliveryApp(
                                         if (fetchedCount == filteredDocs.size) {
                                             deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
                                         }
-                                    }.addOnFailureListener {
+                                    }.addOnFailureListener { e ->
+                                        Log.e("IceSense", "Error fetching user $userId", e)
                                         fetchedCount++
                                         if (fetchedCount == filteredDocs.size) {
                                             deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
                                         }
                                     }
                             } else {
+                                Log.w("IceSense", "Order ${doc.id} has no userId")
                                 fetchedCount++
                                 if (fetchedCount == filteredDocs.size) {
                                     deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }

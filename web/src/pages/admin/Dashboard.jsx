@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [selectedRejectOrder, setSelectedRejectOrder] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [adminUid, setAdminUid] = useState(null);
+  const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
 
   const ORDERS_PER_PAGE = 6;
 
@@ -55,11 +56,56 @@ export default function AdminDashboard() {
     return date.toLocaleString();
   };
 
-  const pendingPaymentOrders = allOrders.filter((order) => order.paymentStatus === 'PENDING_PAYMENT_VERIFICATION');
-  const totalOrderPages = Math.max(1, Math.ceil(pendingPaymentOrders.length / ORDERS_PER_PAGE));
-  const paginatedOrders = pendingPaymentOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
-  const pendingOrders = pendingPaymentOrders.length;
-  const completedOrders = allOrders.filter((order) => order.paymentStatus === 'PAID' || (order.status || '').toLowerCase() === 'completed').length;
+  const getOrderStatusKey = (order) => {
+    const normalizedStatus = (order.status || '').toLowerCase();
+    const paymentStatus = (order.paymentStatus || '').toLowerCase();
+
+    if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected' || paymentStatus === 'rejected') {
+      return 'cancelled';
+    }
+
+    if (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') {
+      return 'pending_payment';
+    }
+
+    if (
+      normalizedStatus === 'delivered' ||
+      normalizedStatus === 'completed' ||
+      normalizedStatus === 'done' ||
+      normalizedStatus === 'finished' ||
+      normalizedStatus === 'delivery completed' ||
+      paymentStatus === 'delivered'
+    ) {
+      return 'delivered';
+    }
+
+    if (normalizedStatus === 'processing' || paymentStatus === 'paid') {
+      return 'processing';
+    }
+
+    return 'pending_payment';
+  };
+
+  const filteredOrders = allOrders.filter((order) => {
+    if (activeOrderFilter === 'processing') {
+      return getOrderStatusKey(order) === 'processing';
+    }
+    if (activeOrderFilter === 'delivered') {
+      return getOrderStatusKey(order) === 'delivered';
+    }
+    if (activeOrderFilter === 'cancelled') {
+      return getOrderStatusKey(order) === 'cancelled';
+    }
+    return getOrderStatusKey(order) === 'pending_payment';
+  });
+
+  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const paginatedOrders = filteredOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
+  const pendingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment').length;
+  const processingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'processing').length;
+  const deliveredOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'delivered').length;
+  const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
+  const completedOrders = processingOrders + deliveredOrders;
 
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
@@ -146,6 +192,10 @@ export default function AdminDashboard() {
     }
   }, [ordersPage, totalOrderPages]);
 
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [activeOrderFilter]);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -200,7 +250,7 @@ export default function AdminDashboard() {
       setVerificationLoadingId(selectedRejectOrder.id);
       await updateDoc(doc(db, 'orders', selectedRejectOrder.id), {
         paymentStatus: 'REJECTED',
-        status: 'Rejected',
+        status: 'Cancelled',
         verifiedAt: serverTimestamp(),
         verifiedBy: adminUid || null,
         adminNotes: rejectReason || 'No reason provided.',
@@ -283,10 +333,15 @@ export default function AdminDashboard() {
                   ordersError={ordersError}
                   paginatedOrders={paginatedOrders}
                   pendingOrders={pendingOrders}
+                  processingOrders={processingOrders}
+                  deliveredOrders={deliveredOrders}
+                  cancelledOrders={cancelledOrders}
                   completedOrders={completedOrders}
                   ordersPage={ordersPage}
                   totalOrderPages={totalOrderPages}
                   setOrdersPage={setOrdersPage}
+                  activeOrderFilter={activeOrderFilter}
+                  setActiveOrderFilter={setActiveOrderFilter}
                   formatDate={formatDate}
                   verificationLoadingId={verificationLoadingId}
                   onApprovePayment={handleApprovePayment}
