@@ -52,4 +52,11 @@ web/*.json
 .artifacts
 .artifacts/
 app.artifacts/
-app.
+
+# Android/Gradle Build Files
+.gradle/
+.kotlin/
+app/.gradle/
+app/build/
+**/build/
+local.properties
