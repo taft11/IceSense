@@ -102,13 +102,30 @@ fun DeliveryApp() {
                             return@addSnapshotListener
                         }
 
+                        // Show orders only when they are "Processing" or already "Delivered"
+                        // AND they are assigned to the current driver
+                        val visibleStatuses = listOf("Processing", "Delivered")
+                        val currentDriverId = auth.currentUser?.uid
+
+                        val filteredDocs = orderDocs.filter { 
+                            val status = it.getString("status") ?: ""
+                            val assignedDriverId = it.getString("assignedDriverId")
+                            
+                            status in visibleStatuses && assignedDriverId == currentDriverId
+                        }
+
+                        if (filteredDocs.isEmpty()) {
+                            deliveries = emptyList()
+                            return@addSnapshotListener
+                        }
+
                         val newDeliveriesMap = mutableMapOf<String, Delivery>()
                         var fetchedCount = 0
 
-                        orderDocs.forEach { doc ->
+                        filteredDocs.forEach { doc ->
                             val userId = doc.getString("userId")
-                            val isConfirmed = doc.getBoolean("isConfirmed") ?: false
                             val proofImageUri = doc.getString("proofImageUri")
+                            val status = doc.getString("status") ?: ""
 
                             if (userId != null) {
                                 firestore.collection("users").document(userId)
@@ -145,24 +162,25 @@ fun DeliveryApp() {
                                             address = fullAddress.ifEmpty { "No Address" },
                                             latitude = lat,
                                             longitude = lng,
-                                            isConfirmed = isConfirmed,
+                                            status = status,
+                                            isConfirmed = status == "Delivered",
                                             proofImageUri = proofImageUri
                                         )
 
                                         fetchedCount++
-                                        if (fetchedCount == orderDocs.size) {
-                                            deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                        if (fetchedCount == filteredDocs.size) {
+                                            deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
                                         }
                                     }.addOnFailureListener {
                                         fetchedCount++
-                                        if (fetchedCount == orderDocs.size) {
-                                            deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                        if (fetchedCount == filteredDocs.size) {
+                                            deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
                                         }
                                     }
                             } else {
                                 fetchedCount++
-                                if (fetchedCount == orderDocs.size) {
-                                    deliveries = orderDocs.mapNotNull { newDeliveriesMap[it.id] }
+                                if (fetchedCount == filteredDocs.size) {
+                                    deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
                                 }
                             }
                         }
@@ -285,7 +303,8 @@ fun DeliveryApp() {
                                         firestore.collection("orders").document(id)
                                             .update(
                                                 "isConfirmed", true,
-                                                "proofImageUri", downloadUrl
+                                                "proofImageUri", downloadUrl,
+                                                "status", "Delivered"
                                             ).addOnCompleteListener {
                                                 isUploading = false
                                                 if (it.isSuccessful) {
@@ -302,7 +321,10 @@ fun DeliveryApp() {
                             } else {
                                 // No photo confirm (if allowed)
                                 firestore.collection("orders").document(id)
-                                    .update("isConfirmed", true)
+                                    .update(
+                                        "isConfirmed", true,
+                                        "status", "Delivered"
+                                    )
                             }
                         },
                         onOpenMenu = {

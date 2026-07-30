@@ -1,35 +1,24 @@
-# Fix Unresolved Reference 'auth'
+# Implementation Plan - Driver Assignment Restriction
 
-The error `Unresolved reference 'auth'` in `MainActivity.kt` is caused by missing Firebase dependencies and the Google Services plugin configuration in the project.
+Restrict the visibility of orders so that a driver only sees orders assigned specifically to them by the admin.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> To successfully run the app on a device/emulator, you will eventually need a `google-services.json` file from your Firebase console. However, this plan focuses on fixing the build error by adding the necessary dependencies.
+> This change relies on the `assignedDriverId` field being present in the Firestore `orders` documents. We will compare this field with the currently logged-in user's UID.
 
 ## Proposed Changes
 
-### Build Configuration
+### MainActivity
 
-#### [MODIFY] [libs.versions.toml](file:///C:/Users/SEANEURY_/Desktop/New%20folder/IceSense/app/gradle/libs.versions.toml)
-- Add versions for Firebase BOM (`34.16.0`) and Google Services plugin (`4.5.0`).
-- Add library definitions for:
-    - `firebase-bom`
-    - `firebase-auth`
-    - `firebase-firestore`
-- Add plugin definition for `google-services`.
-
-#### [MODIFY] [build.gradle.kts (root)](file:///C:/Users/SEANEURY_/Desktop/New%20folder/IceSense/app/build.gradle.kts)
-- Register the Google Services plugin in the top-level `plugins` block.
-
-#### [MODIFY] [build.gradle.kts (:app)](file:///C:/Users/SEANEURY_/Desktop/New%20folder/IceSense/app/app/build.gradle.kts)
-- Apply the `google-services` plugin.
-- Add Firebase dependencies using the BOM for version management.
+#### [MODIFY] [MainActivity.kt](file:///C:/Users/SEANEURY_/Desktop/New folder/IceSense/app/app/src/main/java/com/bellaerin/icesense/MainActivity.kt)
+- **Filtering Logic**: Update the `orderDocs.filter` block inside the `addSnapshotListener`.
+- Add a check to compare `doc.getString("assignedDriverId")` with `currentUserProfile?.uid`.
+- Only include orders where the status is `"Processing"` or `"Delivered"` **AND** the `assignedDriverId` matches the logged-in driver.
 
 ## Verification Plan
 
-### Automated Tests
-- Run `./gradlew :app:compileDebugKotlin` to ensure the "Unresolved reference" errors are resolved.
-
 ### Manual Verification
-- Perform a Gradle Sync in Android Studio to confirm all dependencies are correctly resolved.
+- **Scenario 1**: Log in as Driver A (e.g., Sean). Create an order assigned to Driver B (e.g., Tan). Verify Driver A **cannot** see the order.
+- **Scenario 2**: Update the order's `assignedDriverId` to Driver A's UID. Verify the order **appears** for Driver A.
+- **Scenario 3**: Verify that orders with status `"Delivered"` also remain visible to the assigned driver in their history.

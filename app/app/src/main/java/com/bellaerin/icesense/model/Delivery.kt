@@ -6,6 +6,7 @@ data class Delivery(
     val address: String,
     val latitude: Double,
     val longitude: Double,
+    val status: String = "pending",
     val isConfirmed: Boolean = false,
     val proofImageUri: String? = null
 )
