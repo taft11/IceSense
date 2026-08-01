@@ -227,24 +227,8 @@ export default function AccountView({
                   placeholder="Philippines"
                 />
               </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-gray-700">Latitude</span>
-                <input
-                  readOnly
-                  value={addressForm.latitude ?? ''}
-                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-900"
-                  placeholder="Select a location on the map"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-gray-700">Longitude</span>
-                <input
-                  readOnly
-                  value={addressForm.longitude ?? ''}
-                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-900"
-                  placeholder="Select a location on the map"
-                />
-              </label>
+              <input type="hidden" name="latitude" value={addressForm.latitude ?? ''} />
+              <input type="hidden" name="longitude" value={addressForm.longitude ?? ''} />
             </div>
             <div className="mt-4">
               <LocationPicker
