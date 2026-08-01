@@ -10,6 +10,7 @@ import OrderView from './components/OrderView';
 import OrderHistoryView from './components/OrderHistoryView';
 import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
+import PendingOrderConfirmationModal from './components/PendingOrderConfirmationModal';
 import LocationPicker from './components/LocationPicker';
 
 const CART_STORAGE_KEY = 'icesense-cart-v1';
@@ -98,6 +99,9 @@ export default function CustomerPortal() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [orderStatus, setOrderStatus] = useState('idle');
+  const [toast, setToast] = useState({ visible: false, message: '' });
+  const [pendingOrderId, setPendingOrderId] = useState(null);
+  const [isPendingOrderModalOpen, setIsPendingOrderModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -171,6 +175,16 @@ export default function CustomerPortal() {
       window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
     }
   }, [cartItems]);
+
+  useEffect(() => {
+    if (!toast.visible) return;
+
+    const timer = window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [toast.visible]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -339,6 +353,16 @@ export default function CustomerPortal() {
     if (quantity > 1) setQuantity((prev) => prev - 1);
   };
 
+  const handleQuantityChange = (event) => {
+    const nextQuantity = Number(event.target.value);
+    if (Number.isNaN(nextQuantity)) return;
+    if (nextQuantity <= 0) {
+      setQuantity(1);
+      return;
+    }
+    setQuantity(Math.min(nextQuantity, activeStock));
+  };
+
   const addToCart = (event) => {
     event.preventDefault();
     if (!activeProduct) return;
@@ -370,6 +394,7 @@ export default function CustomerPortal() {
 
     setQuantity(1);
     setOrderStatus('idle');
+    setToast({ visible: true, message: `${qtyToAdd} ${activeProduct.name} added to cart.` });
   };
 
   const updateCartItemQuantity = (productId, delta) => {
@@ -508,72 +533,73 @@ const handleOrder = async () => {
     setOrderStatus('processing');
     setReceiptError('');
 
-    setTimeout(async () => {
-      try {
-        const ordersRef = collection(db, 'orders');
+    try {
+      const ordersRef = collection(db, 'orders');
 
-        const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
-        await uploadBytes(receiptRef, receiptFile);
-        const receiptUrl = await getDownloadURL(receiptRef);
+      const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
+      await uploadBytes(receiptRef, receiptFile);
+      const receiptUrl = await getDownloadURL(receiptRef);
 
-        const orderPayload = {
-          userId: currentUser.uid,
-          items: cartItems.map((item) => ({
-            productId: item.productId,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          total: cartSubtotal,
-          status: 'Pending Payment Verification',
-          paymentMethod,
-          paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
-          receiptUrl,
-          adminNotes: '',
-          verifiedAt: null,
-          verifiedBy: null,
-          createdAt: serverTimestamp(),
-          customerName: fullName || currentUser.displayName || currentUser.email || 'Customer',
-          customerEmail: currentUser.email || '',
-          deliveryDate: normalizedDeliveryDate,
-          deliveryTimeSlot: normalizedDeliverySlot,
-          deliverySlot: normalizedDeliverySlot,
-          shippingAddress,
-          landmark,
-          deliveryLatitude: defaultAddress?.latitude ?? null,
-          deliveryLongitude: defaultAddress?.longitude ?? null,
-          deliveryLocation:
-            defaultAddress?.latitude != null && defaultAddress?.longitude != null
-              ? {
-                  latitude: defaultAddress.latitude,
-                  longitude: defaultAddress.longitude,
-                }
-              : null,
-        };
+      const orderPayload = {
+        userId: currentUser.uid,
+        items: cartItems.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        total: cartSubtotal,
+        status: 'Pending Payment Verification',
+        paymentMethod,
+        paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+        receiptUrl,
+        adminNotes: '',
+        verifiedAt: null,
+        verifiedBy: null,
+        createdAt: serverTimestamp(),
+        customerName: fullName || currentUser.displayName || currentUser.email || 'Customer',
+        customerEmail: currentUser.email || '',
+        deliveryDate: normalizedDeliveryDate,
+        deliveryTimeSlot: normalizedDeliverySlot,
+        deliverySlot: normalizedDeliverySlot,
+        shippingAddress,
+        landmark,
+        deliveryLatitude: defaultAddress?.latitude ?? null,
+        deliveryLongitude: defaultAddress?.longitude ?? null,
+        deliveryLocation:
+          defaultAddress?.latitude != null && defaultAddress?.longitude != null
+            ? {
+                latitude: defaultAddress.latitude,
+                longitude: defaultAddress.longitude,
+              }
+            : null,
+      };
 
-        await addDoc(ordersRef, orderPayload);
+      const orderDocRef = await addDoc(ordersRef, orderPayload);
 
-        setStocks((prev) => {
-          const nextStocks = { ...prev };
-          cartItems.forEach((item) => {
-            nextStocks[item.productId] = Math.max(0, prev[item.productId] - item.quantity);
-          });
-          return nextStocks;
+      setStocks((prev) => {
+        const nextStocks = { ...prev };
+        cartItems.forEach((item) => {
+          nextStocks[item.productId] = Math.max(0, prev[item.productId] - item.quantity);
         });
+        return nextStocks;
+      });
 
-        setCartItems([]);
-        setReceiptFile(null);
-        setOrderStatus('success');
-        setQuantity(1);
-        setOrdersError('');
+      setCartItems([]);
+      setReceiptFile(null);
+      setOrderStatus('success');
+      setPendingOrderId(orderDocRef.id);
+      setIsCartOpen(false);
+      setIsPendingOrderModalOpen(true);
+      setQuantity(1);
+      setOrdersError('');
 
-        setTimeout(() => setOrderStatus('idle'), 3000);
-      } catch (error) {
-        console.error('Order submission failed', error);
-        setOrdersError('Your order could not be saved. Please try again.');
-        setOrderStatus('idle');
-      }
-    }, 1500);
+      setTimeout(() => setOrderStatus('idle'), 3000);
+    } catch (error) {
+      console.error('Order submission failed', error);
+      setOrdersError('Your order could not be saved. Please try again.');
+      setOrderStatus('idle');
+    }
   };
 
   const openCheckoutConfirmation = () => {
@@ -589,6 +615,20 @@ const handleOrder = async () => {
   const confirmCheckoutOrder = () => {
     setIsCheckoutConfirmOpen(false);
     handleOrder();
+  };
+
+  const closePendingOrderModal = () => {
+    setIsPendingOrderModalOpen(false);
+  };
+
+  const handleViewOrders = () => {
+    setIsPendingOrderModalOpen(false);
+    navigate('/portal/orders');
+  };
+
+  const handleBackHome = () => {
+    setIsPendingOrderModalOpen(false);
+    navigate('/portal');
   };
 
   const handleAccountChange = (field, value) => {
@@ -811,6 +851,7 @@ const handleOrder = async () => {
               quantity={quantity}
               onDecrease={decreaseQuantity}
               onIncrease={increaseQuantity}
+              onQuantityChange={handleQuantityChange}
               onAddToCart={addToCart}
               orderStatus={orderStatus}
               remainingStock={getRemainingStockForProduct(selectedProductId)}
@@ -852,6 +893,12 @@ const handleOrder = async () => {
         </div>
       </main>
 
+      <div className={`pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 transition-opacity duration-300 ${toast.visible ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="pointer-events-auto max-w-md rounded-3xl border border-[#4091c9]/15 bg-white/95 px-5 py-4 shadow-xl shadow-slate-900/10 backdrop-blur-sm">
+          <p className="text-sm font-semibold text-[#205a82]">{toast.message}</p>
+        </div>
+      </div>
+
       <CartSidebar
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -883,6 +930,14 @@ const handleOrder = async () => {
         receiptFile={receiptFile}
         onReceiptFileChange={setReceiptFile}
         receiptError={receiptError}
+      />
+
+      <PendingOrderConfirmationModal
+        isOpen={isPendingOrderModalOpen}
+        orderId={pendingOrderId}
+        onViewOrders={handleViewOrders}
+        onBackHome={handleBackHome}
+        onClose={closePendingOrderModal}
       />
     </div>
   );

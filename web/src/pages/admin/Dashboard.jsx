@@ -304,14 +304,6 @@ export default function AdminDashboard() {
           </ul>
         </nav>
 
-        <div className="mt-6 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/50 p-5 border border-blue-100/50">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <p className="font-bold text-sm text-blue-900">System Online</p>
-          </div>
-          <p className="text-xs text-blue-700 leading-relaxed">Live monitoring is active across all facility sensors.</p>
-        </div>
-
         <div className="mt-6">
           <button onClick={handleSignOut} className="w-full rounded-lg bg-red-50 text-red-700 px-4 py-2 text-sm font-semibold hover:bg-red-100">
             Sign out

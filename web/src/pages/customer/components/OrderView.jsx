@@ -11,6 +11,7 @@ export default function OrderView({
   quantity,
   onDecrease,
   onIncrease,
+  onQuantityChange,
   onAddToCart,
   orderStatus,
   remainingStock,
@@ -135,7 +136,15 @@ export default function OrderView({
                 <button type="button" onClick={onDecrease} className="rounded-lg border border-gray-100 bg-white p-3 text-gray-800 shadow-sm transition hover:bg-gray-100">
                   <Minus className="h-5 w-5" />
                 </button>
-                <input type="number" readOnly value={quantity} className="w-16 bg-transparent text-center text-2xl font-bold focus:outline-none" />
+                <input
+                  type="number"
+                  min="1"
+                  max={activeStock}
+                  value={quantity}
+                  onChange={onQuantityChange}
+                  className="no-spinner w-16 bg-transparent text-center text-2xl font-bold appearance-none focus:outline-none"
+                  style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none' }}
+                />
                 <button type="button" onClick={onIncrease} className="rounded-lg border border-gray-100 bg-white p-3 text-gray-800 shadow-sm transition hover:bg-gray-100" disabled={quantity >= activeStock}>
                   <Plus className="h-5 w-5" />
                 </button>

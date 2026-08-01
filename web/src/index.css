@@ -23,3 +23,15 @@ body {
 .overview-page .tracking-wider {
   letter-spacing: 0.01em;
 }
+
+.no-spinner {
+  appearance: none;
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+}
+
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

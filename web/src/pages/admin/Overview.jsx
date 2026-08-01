@@ -20,7 +20,6 @@ export default function Overview({ iotData, todayDate }) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 group-hover:scale-110 transition-transform">
               <Thermometer className="h-6 w-6" />
             </div>
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Live</span>
           </div>
           <div>
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Freezer Temp</h3>
@@ -40,7 +39,6 @@ export default function Overview({ iotData, todayDate }) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 group-hover:scale-110 transition-transform">
               <Droplets className="h-6 w-6" />
             </div>
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">Live</span>
           </div>
           <div>
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Water Tank Level</h3>
