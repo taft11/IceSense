@@ -1,7 +1,11 @@
+import { getApp } from 'firebase/app';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Scale, ShieldCheck, TrendingUp, Wrench } from 'lucide-react';
+import { Calendar, ShieldCheck, TrendingUp } from 'lucide-react';
 import { addDoc, collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { getDatabase, onValue, ref } from 'firebase/database';
 import { auth, db } from '../../services/firebase';
+
+const realtimeDb = getDatabase(getApp());
 
 const defaultProducts = [
   {
@@ -61,16 +65,20 @@ const defaultInventory = {
 
 export default function Inventory() {
   const [products, setProducts] = useState([]);
-  const [inventory, setInventory] = useState([]);
+  const [firestoreInventory, setFirestoreInventory] = useState([]);
+  const [scaleInventory, setScaleInventory] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState('tube-50');
   const [adjustValue, setAdjustValue] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('Loading inventory…');
+  const [auditPage, setAuditPage] = useState(1);
+  const logsPerPage = 5;
 
   useEffect(() => {
     let unsubscribeInventory = null;
     let unsubscribeLogs = null;
+    let unsubscribeScaleInventory = null;
 
     const seedCollections = async () => {
       try {
@@ -117,7 +125,7 @@ export default function Inventory() {
             productId: docSnapshot.id,
             ...docSnapshot.data(),
           }));
-          setInventory(inventoryData);
+          setFirestoreInventory(inventoryData);
           setLoadingMessage('');
         });
 
@@ -126,6 +134,14 @@ export default function Inventory() {
             .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
             .sort((a, b) => (b.timestamp?.toMillis?.() || b.timestamp || 0) - (a.timestamp?.toMillis?.() || a.timestamp || 0));
           setLogs(parsedLogs);
+        });
+
+        // RTDB listener for scale-monitored products so live sensor counts can stream into the UI.
+        const scaleInventoryRef = ref(realtimeDb, 'inventory/scale_1');
+        unsubscribeScaleInventory = onValue(scaleInventoryRef, (snapshot) => {
+          const value = snapshot.val();
+          setScaleInventory(value || null);
+          setLoadingMessage('');
         });
 
         const productsRef = collection(db, 'products');
@@ -146,13 +162,26 @@ export default function Inventory() {
     return () => {
       if (unsubscribeInventory) unsubscribeInventory();
       if (unsubscribeLogs) unsubscribeLogs();
+      if (unsubscribeScaleInventory) unsubscribeScaleInventory();
     };
   }, []);
 
   const inventoryRows = useMemo(() => {
-    const inventoryMap = Object.fromEntries(inventory.map((item) => [item.productId, item]));
+    const inventoryMap = Object.fromEntries(firestoreInventory.map((item) => [item.productId, item]));
+    const scaleBreakdown = scaleInventory?.sacks_breakdown || {};
 
-    return products.map((product) => {
+    const orderedProducts = [...products].sort((left, right) => {
+      const leftGroup = left.type === 'tube' ? 0 : 1;
+      const rightGroup = right.type === 'tube' ? 0 : 1;
+
+      if (leftGroup !== rightGroup) {
+        return leftGroup - rightGroup;
+      }
+
+      return Number(left.weightKg || 0) - Number(right.weightKg || 0);
+    });
+
+    return orderedProducts.map((product) => {
       const stockInfo = inventoryMap[product.productId] || {
         currentStock: 0,
         totalWeightKg: 0,
@@ -161,6 +190,37 @@ export default function Inventory() {
         scaleSensorId: null,
       };
 
+      const isScaleMonitored = Boolean(product.isMonitoredByScale);
+      let currentStock = Number(stockInfo.currentStock || 0);
+      let totalWeightKg = Number(stockInfo.totalWeightKg || 0);
+      let lastUpdated = stockInfo.lastUpdated;
+      let updateSource = stockInfo.updateSource || 'manual_entry';
+      let scaleSensorId = stockInfo.scaleSensorId || null;
+
+      if (isScaleMonitored) {
+        let scaleKey = null;
+
+        switch (product.productId) {
+          case 'tube-50':
+            scaleKey = '50kg_sacks';
+            break;
+          case 'tube-35':
+            scaleKey = '35kg_sacks';
+            break;
+          case 'tube-5':
+            scaleKey = '5kg_sacks';
+            break;
+          default:
+            scaleKey = null;
+        }
+
+        currentStock = scaleKey ? Number(scaleBreakdown[scaleKey] || 0) : 0;
+        totalWeightKg = currentStock * Number(product.weightKg || 0);
+        lastUpdated = scaleInventory?.last_updated ? new Date(scaleInventory.last_updated) : stockInfo.lastUpdated;
+        updateSource = 'scale_sensor';
+        scaleSensorId = 'ESP32_Scale_01';
+      }
+
       return {
         id: product.productId,
         name: product.name,
@@ -168,15 +228,15 @@ export default function Inventory() {
         packaging: product.packaging,
         weightPerUnitKg: product.weightKg,
         price: product.price,
-        isMonitoredByScale: product.isMonitoredByScale,
-        currentStock: stockInfo.currentStock || 0,
-        totalWeightKg: stockInfo.totalWeightKg || 0,
-        lastUpdated: stockInfo.lastUpdated,
-        updateSource: stockInfo.updateSource || 'manual_entry',
-        scaleSensorId: stockInfo.scaleSensorId || null,
+        isMonitoredByScale: isScaleMonitored,
+        currentStock,
+        totalWeightKg,
+        lastUpdated,
+        updateSource,
+        scaleSensorId,
       };
     });
-  }, [inventory, products]);
+  }, [firestoreInventory, products, scaleInventory]);
 
   const selectedItem = useMemo(
     () => inventoryRows.find((item) => item.id === selectedItemId) || inventoryRows[0],
@@ -185,6 +245,17 @@ export default function Inventory() {
 
   const totalActiveWeight = inventoryRows.reduce((sum, item) => sum + item.totalWeightKg, 0);
   const totalSacks = inventoryRows.reduce((sum, item) => sum + item.currentStock, 0);
+  const totalAuditPages = Math.max(1, Math.ceil(logs.length / logsPerPage));
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (auditPage - 1) * logsPerPage;
+    return logs.slice(startIndex, startIndex + logsPerPage);
+  }, [auditPage, logs, logsPerPage]);
+
+  useEffect(() => {
+    if (auditPage > totalAuditPages) {
+      setAuditPage(1);
+    }
+  }, [auditPage, totalAuditPages]);
 
   const handleOpenAdjust = (itemId) => {
     setSelectedItemId(itemId);
@@ -194,7 +265,7 @@ export default function Inventory() {
 
   const handleCalibrateScale = async () => {
     const currentUser = auth.currentUser;
-    const currentProduct = inventoryRows[0];
+    const currentProduct = inventoryRows.find((item) => item.isMonitoredByScale) || inventoryRows[0];
 
     await addDoc(collection(db, 'stock_logs'), {
       productId: currentProduct?.id || 'tube-50',
@@ -217,24 +288,38 @@ export default function Inventory() {
     const nextWeight = nextStock * Number(selectedItem.weightPerUnitKg || 0);
     const performedBy = auth.currentUser?.uid || 'ESP32_Scale_01';
 
-    await updateDoc(doc(db, 'inventory', selectedItem.id), {
-      currentStock: nextStock,
-      totalWeightKg: nextWeight,
-      lastUpdated: serverTimestamp(),
-      updateSource: 'manual_entry',
-      scaleSensorId: null,
-    });
+    if (selectedItem.isMonitoredByScale) {
+      // Scale-monitored items stay driven by RTDB telemetry; manual changes are logged as overrides only.
+      await addDoc(collection(db, 'stock_logs'), {
+        productId: selectedItem.id,
+        changeQuantity: changeAmount,
+        previousStock: currentStock,
+        newStock: nextStock,
+        reason: 'production_batch',
+        source: 'manual_override',
+        performedBy,
+        timestamp: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(doc(db, 'inventory', selectedItem.id), {
+        currentStock: nextStock,
+        totalWeightKg: nextWeight,
+        lastUpdated: serverTimestamp(),
+        updateSource: 'manual_entry',
+        scaleSensorId: null,
+      });
 
-    await addDoc(collection(db, 'stock_logs'), {
-      productId: selectedItem.id,
-      changeQuantity: changeAmount,
-      previousStock: currentStock,
-      newStock: nextStock,
-      reason: 'production_batch',
-      source: 'manual_override',
-      performedBy,
-      timestamp: serverTimestamp(),
-    });
+      await addDoc(collection(db, 'stock_logs'), {
+        productId: selectedItem.id,
+        changeQuantity: changeAmount,
+        previousStock: currentStock,
+        newStock: nextStock,
+        reason: 'production_batch',
+        source: 'manual_override',
+        performedBy,
+        timestamp: serverTimestamp(),
+      });
+    }
 
     setIsAdjustOpen(false);
     setAdjustValue(0);
@@ -268,27 +353,47 @@ export default function Inventory() {
       </div>
 
       <section className="mb-7">
-        <div className="mb-3 flex items-center gap-2">
-          <Activity className="h-5 w-5 text-[#4091c9]" />
+        <div className="mb-3">
           <h3 className="text-lg font-bold text-gray-800">Live Overview</h3>
         </div>
 
         <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          {loadingMessage || 'Inventory is synced with Firestore stores.'}
+          {loadingMessage || 'Inventory is synced with Firestore and scale telemetry.'}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* UI optimization: summary metrics now live in a compact horizontal banner above the product grid. */}
+        <div className="mb-5 grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-3">
+          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Total Weight</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{totalActiveWeight} kg</p>
+          </div>
+          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Total Units</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{totalSacks}</p>
+          </div>
+          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Scale Feed</p>
+            <p className="mt-1 text-lg font-bold text-green-700">Online</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {inventoryRows.map((item) => (
-            <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-start justify-between gap-3">
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleOpenAdjust(item.id)}
+              className="rounded-2xl border border-gray-100 bg-white p-5 text-left shadow-sm transition hover:border-[#4091c9] hover:shadow-md"
+            >
+              <div className="mb-4">
                 <div>
                   <p className="text-base font-bold text-gray-800">{item.name}</p>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">Pack size: {item.packaging} · {item.weightPerUnitKg}kg</p>
-                  <div className="mt-2 inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                    🟢 {item.isMonitoredByScale ? 'Scale Live (ESP32)' : 'Manual Override'}
+                  {/* UI optimization: the card subtitle now uses a compact size label for clearer scanning. */}
+                  <p className="mt-1 text-xs font-semibold text-gray-500">{item.type === 'tube' ? `${item.weightPerUnitKg}kg Tube` : `${item.weightPerUnitKg}kg ${item.packaging}`}</p>
+                  <div className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${item.isMonitoredByScale && item.currentStock === 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                    {item.isMonitoredByScale && item.currentStock === 0 ? '🟡 Scale Idle' : '🟢 Scale Live (ESP32)'}
                   </div>
                 </div>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{item.type}</span>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -302,57 +407,11 @@ export default function Inventory() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between rounded-xl border border-gray-100 px-3 py-2 text-sm text-gray-600">
-                <span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#4091c9]" /> {item.lastUpdated?.toDate ? item.lastUpdated.toDate().toLocaleString() : 'Pending update'}</span>
-                <button
-                  type="button"
-                  onClick={() => handleOpenAdjust(item.id)}
-                  className="font-semibold text-[#4091c9]"
-                >
-                  Adjust
-                </button>
+              <div className="mt-4 flex items-center rounded-xl border border-gray-100 px-3 py-2 text-sm text-gray-600">
+                <span className="flex items-center gap-2"><Calendar className="h-4 w-4 text-[#4091c9]" /> {item.lastUpdated?.toDate ? item.lastUpdated.toDate().toLocaleString() : item.lastUpdated instanceof Date ? item.lastUpdated.toLocaleString() : item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : 'Live (Syncing...)'}</span>
               </div>
-            </div>
+            </button>
           ))}
-
-          <div className="rounded-2xl border border-dashed border-[#4091c9] bg-blue-50 p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-[#4091c9]">
-              <TrendingUp className="h-5 w-5" />
-              <p className="text-sm font-bold uppercase tracking-wide">Summary</p>
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-gray-700">
-              <div className="flex items-center justify-between">
-                <span>Total Weight</span>
-                <span className="font-bold text-gray-900">{totalActiveWeight} kg</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Total Units</span>
-                <span className="font-bold text-gray-900">{totalSacks}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Scale Feed</span>
-                <span className="font-bold text-green-700">Online</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mb-7 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <Wrench className="h-5 w-5 text-[#4091c9]" />
-          <h3 className="text-lg font-bold text-gray-800">Stock Adjustment Modal/Button</h3>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleOpenAdjust('tube-50')}
-            className="rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2d75aa]"
-          >
-            Open Adjustment Panel
-          </button>
-          <p className="text-sm text-gray-500">Use this action to update inventory quantity with an operator traceable entry.</p>
         </div>
       </section>
 
@@ -374,13 +433,17 @@ export default function Inventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {logs.map((log) => {
+              {paginatedLogs.map((log) => {
                 const productName = products.find((product) => product.productId === log.productId)?.name || log.productId;
                 const changeLabel = log.changeQuantity >= 0 ? `+${log.changeQuantity}` : `${log.changeQuantity}`;
 
                 return (
                   <tr key={log.id}>
-                    <td className="px-4 py-3 text-gray-600">{log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString() : 'Pending'}</td>
+                    <td className="px-4 py-3 text-gray-600">{log.timestamp?.toDate 
+                        ? log.timestamp.toDate().toLocaleString() 
+                        : log.timestamp 
+                        ? new Date(log.timestamp).toLocaleString() 
+                        : 'Pending'}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{productName}</td>
                     <td className="px-4 py-3 text-gray-700">{changeLabel} units · {log.previousStock} → {log.newStock}</td>
                     <td className="px-4 py-3 text-gray-700">{log.source}</td>
@@ -391,6 +454,33 @@ export default function Inventory() {
             </tbody>
           </table>
         </div>
+
+        {logs.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3">
+            <p className="text-sm text-gray-600">
+              Showing {Math.min(logsPerPage, logs.length - ((auditPage - 1) * logsPerPage))} of {logs.length} audit entries
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                disabled={auditPage === 1}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm font-semibold text-gray-700">Page {auditPage} of {totalAuditPages}</span>
+              <button
+                type="button"
+                onClick={() => setAuditPage((page) => Math.min(totalAuditPages, page + 1))}
+                disabled={auditPage === totalAuditPages}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {isAdjustOpen && (
