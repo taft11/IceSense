@@ -13,8 +13,9 @@ import CartSidebar from './components/CartSidebar';
 import PendingOrderConfirmationModal from './components/PendingOrderConfirmationModal';
 import LocationPicker from './components/LocationPicker';
 
-const CART_STORAGE_KEY = 'icesense-cart-v1';
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
+
+const getCartStorageKey = (userId = null) => (userId ? `icesense-cart-v1-${userId}` : 'icesense-cart-v1-guest');
 
 const DELIVERY_TIME_SLOTS = [
   { id: 'morning', label: '8:00 AM - 11:00 AM' },
@@ -22,11 +23,11 @@ const DELIVERY_TIME_SLOTS = [
   { id: 'afternoon', label: '2:00 PM - 5:00 PM' },
 ];
 
-const getStoredCartItems = () => {
+const getStoredCartItems = (userId = null) => {
   if (typeof window === 'undefined') return [];
 
   try {
-    const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
+    const savedCart = window.localStorage.getItem(getCartStorageKey(userId));
     const parsedCart = savedCart ? JSON.parse(savedCart) : [];
     return Array.isArray(parsedCart) ? parsedCart : [];
   } catch (error) {
@@ -94,6 +95,7 @@ export default function CustomerPortal() {
   const [selectedIceType, setSelectedIceType] = useState('tube');
   const [selectedProductId, setSelectedProductId] = useState('tube-50');
   const [quantity, setQuantity] = useState(1);
+  const [activeUserId, setActiveUserId] = useState(null);
   const [cartItems, setCartItems] = useState(() => getStoredCartItems());
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -171,10 +173,15 @@ export default function CustomerPortal() {
   const hasSavedAddress = addresses.length > 0;
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+    if (typeof window === 'undefined') return;
+
+    const storageKey = getCartStorageKey(activeUserId);
+    if (cartItems.length === 0) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, JSON.stringify(cartItems));
     }
-  }, [cartItems]);
+  }, [activeUserId, cartItems]);
 
   useEffect(() => {
     if (!toast.visible) return;
@@ -260,6 +267,8 @@ export default function CustomerPortal() {
       }
 
       if (!user) {
+        setActiveUserId(null);
+        setCartItems([]);
         setOrders([]);
         setOrdersLoading(false);
         setOrdersError('');
@@ -267,6 +276,8 @@ export default function CustomerPortal() {
         return;
       }
 
+      setActiveUserId(user.uid);
+      setCartItems(getStoredCartItems(user.uid));
       loadUserAccount(user.uid, user.email);
 
       setOrdersLoading(true);
@@ -336,7 +347,6 @@ export default function CustomerPortal() {
 
   const handleToggleAccountMenu = () => {
     setAccountMenuOpen((prev) => !prev);
-    navigate('/portal/account');
   };
 
   const handleSelectAccountSection = (section) => {
