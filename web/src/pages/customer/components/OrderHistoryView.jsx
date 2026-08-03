@@ -34,6 +34,14 @@ const formatReadableDate = (value) => {
   }).format(date);
 };
 
+const getItemImage = (item) => {
+  if (item.image || item.imageUrl) return item.image || item.imageUrl;
+  const name = String(item.name || '').toLowerCase();
+  if (name.includes('crushed')) return '/CrushedIce.jpg';
+  if (name.includes('tube')) return '/TubeIce.jpg';
+  return null;
+};
+
 export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder }) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -103,68 +111,101 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
             const deliveryTimeSlot = order.deliveryTimeSlot || order.deliverySlot || 'Not selected';
 
             return (
-              <div key={order.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Clock3 className="h-4 w-4 text-[#4091c9]" />
-                      <p className="text-sm font-semibold text-gray-700">{orderDate}</p>
-                    </div>
-                    <p className="mt-2 text-lg font-bold text-gray-900">Order #{order.id?.slice(0, 6).toUpperCase()}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[displayStatus] || 'bg-gray-100 text-gray-700'}`}>
+              <div
+                key={order.id}
+                className="rounded-xl border border-slate-200/80 bg-white shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        Order #{order.id?.slice(0, 6).toUpperCase()}
+                      </p>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          STATUS_BADGE_STYLES[displayStatus] || 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
                         {displayStatus}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                      <span>{orderDate}</span>
+                      <span className="font-semibold text-slate-900">
+                        ₱{Number(order.total || 0).toFixed(2)}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-left lg:text-right">
-                    <p className="text-sm text-gray-500">Total</p>
-                    <p className="text-xl font-black text-[#4091c9]">₱{Number(order.total || 0).toFixed(2)}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900">
-                  <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <Truck className="h-4 w-4" />
-                      <span>Target Delivery</span>
-                    </div>
-                    <div className="text-sky-800">
-                      <span>{deliveryDate}</span>
-                      <span className="mx-2">•</span>
-                      <span>{deliveryTimeSlot}</span>
+                  <div className="rounded-2xl bg-sky-50/50 px-4 py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="inline-flex items-center gap-2 text-sky-700">
+                        <Truck className="h-4 w-4" />
+                        <span className="font-semibold">Target Delivery</span>
+                      </div>
+                      <div className="text-sm text-slate-700">
+                        <span>{deliveryDate}</span>
+                        <span className="mx-2">•</span>
+                        <span>{deliveryTimeSlot}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="mt-4 space-y-2">
-                  {(order.items || []).map((item, index) => (
-                    <div key={`${order.id}-${index}`} className="flex items-center justify-between rounded-xl bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
-                      <span>{item.name} × {item.quantity}</span>
-                      <span>₱{Number(item.price * item.quantity || 0).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
+                  <div className="mt-4 divide-y divide-slate-100 rounded-2xl bg-slate-50">
+                    {(order.items || []).map((item, index) => {
+                      const itemImage = getItemImage(item);
+                      return (
+                        <div
+                          key={`${order.id}-${index}`}
+                          className="flex items-center justify-between gap-4 px-4 py-3 text-sm text-slate-700"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative h-10 w-10 overflow-hidden rounded-xl bg-slate-100">
+                              {itemImage ? (
+                                <img
+                                  src={itemImage}
+                                  alt={item.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                                  <span className="text-xs">No image</span>
+                                </div>
+                              )}
+                            </div>
+                            <span>{item.name} × {item.quantity}</span>
+                          </div>
+                          <span className="font-semibold text-slate-900">
+                            ₱{Number(item.price * item.quantity || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onReorder?.(order)}
-                    className="rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
-                  >
-                    Reorder
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-[#4091c9] hover:text-[#4091c9]"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      View Details
-                      <ChevronDown className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`} />
-                    </span>
-                  </button>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
+                      className="inline-flex items-center justify-center rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        View Details
+                        <ChevronDown
+                          className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`}
+                        />
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onReorder?.(order)}
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9]"
+                    >
+                      Reorder
+                    </button>
+                  </div>
                 </div>
 
                 {expandedOrderId === order.id && (
