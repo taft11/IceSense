@@ -45,6 +45,10 @@ web/*.json
 !web/tsconfig.json
 !web/components.json
 
+# Sensitive keys
+serviceAccountKey.json
+.csv
+
 # Environment Variables
 .env
 .env*.local
