@@ -1,6 +1,10 @@
-import { Thermometer, Droplets, Package, Truck, TrendingUp, Calendar, Activity, Bell, AlertTriangle } from 'lucide-react';
+import { Calendar, Activity, Bell, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Overview({ iotData, todayDate }) {
+  const navigate = useNavigate();
+  const tomorrowDemandKg = 780;
+
   return (
     <div className="animate-fade-in overview-page">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -15,67 +19,63 @@ export default function Overview({ iotData, todayDate }) {
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="group rounded-3xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 group-hover:scale-110 transition-transform">
-              <Thermometer className="h-6 w-6" />
-            </div>
+            <h3 className="text-sm font-semibold text-slate-700">Freezer Temp</h3>
+            <span className="rounded-full border border-red-200/60 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">🔴 CRITICAL</span>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Freezer Temp</h3>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-black text-gray-900">{iotData.temperature}</p>
-              <span className="text-sm font-medium text-gray-400">/ -18°C Target</span>
+              <p className="text-3xl font-bold text-slate-900">{iotData.temperature}</p>
+              <span className="text-sm text-slate-500">/ -18°C Target</span>
             </div>
-            <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
-              <Droplets className="h-4 w-4" />
-              <span>Humidity: {iotData.humidity}</span>
+            <p className="mt-2 text-sm text-slate-500">Humidity: {iotData.humidity}</p>
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full w-[88%] rounded-full bg-red-500" />
             </div>
           </div>
         </div>
 
-        <div className="group rounded-3xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 group-hover:scale-110 transition-transform">
-              <Droplets className="h-6 w-6" />
-            </div>
+            <h3 className="text-sm font-semibold text-slate-700">Water Tank Level</h3>
+            <span className="rounded-full border border-sky-200/60 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">88% Full</span>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Water Tank Level</h3>
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-black text-gray-900">{iotData.waterLevel}</p>
+            <p className="text-3xl font-bold text-slate-900">{iotData.waterLevel}</p>
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-sky-500" style={{ width: '88%' }} />
             </div>
           </div>
         </div>
 
-        <div className="group rounded-3xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500 group-hover:scale-110 transition-transform">
-              <Package className="h-6 w-6" />
-            </div>
-            <span className="flex items-center text-xs font-bold text-emerald-500"><TrendingUp className="w-3 h-3 mr-1" /> +12%</span>
+            <h3 className="text-sm font-semibold text-slate-700">Total Stock Produced</h3>
+            <span className="rounded-full border border-emerald-200/60 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">+12%</span>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Total Stock Produced</h3>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-black text-gray-900">{iotData.sacksProduced}</p>
-              <span className="text-sm font-medium text-gray-400">Sacks</span>
+              <p className="text-3xl font-bold text-slate-900">{iotData.sacksProduced}</p>
+              <span className="text-sm text-slate-500">Sacks</span>
             </div>
+            <p className="mt-3 text-sm text-slate-500">🟢 124% of daily target (100 Sacks)</p>
           </div>
         </div>
 
-        <div className="group rounded-3xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-500 group-hover:scale-110 transition-transform">
-              <Truck className="h-6 w-6" />
-            </div>
+            <h3 className="text-sm font-semibold text-slate-700">Active Deliveries</h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> LIVE
+            </span>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Active Deliveries</h3>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-black text-gray-900">{iotData.activeTrucks}</p>
-              <span className="text-sm font-medium text-gray-400">On Route</span>
+              <p className="text-3xl font-bold text-slate-900">{iotData.activeTrucks}</p>
+              <span className="text-sm text-slate-500">On Route</span>
             </div>
+            <p className="mt-3 text-sm text-slate-500">2 Scheduled • 1 In Transit</p>
           </div>
         </div>
       </div>
@@ -119,14 +119,20 @@ export default function Overview({ iotData, todayDate }) {
             </div>
             <div className="relative z-10">
               <div className="mb-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-md border border-white/10">
-                ✨ AI Forecast
+                📈 Demand Advisory
               </div>
               <h3 className="mb-2 text-xl font-bold">Demand Spike Alert</h3>
-              <p className="mb-6 text-sm text-blue-100 leading-relaxed">
-                Based on incoming weather data, ice demand is predicted to rise by <strong className="text-white">25%</strong> this weekend.
+              <p className="mb-2 text-sm text-blue-100 leading-relaxed">
+                Tomorrow&apos;s demand is forecast at <strong className="text-white">{tomorrowDemandKg} kg</strong>.
               </p>
-              <button className="w-full rounded-xl bg-white text-[#205a82] py-3 text-sm font-bold shadow-md hover:bg-gray-50 transition-colors">
-                Adjust Production
+              <p className="mb-6 text-sm text-blue-100 leading-relaxed">
+                A strong increase is expected due to weather and weekend activity patterns.
+              </p>
+              <button
+                onClick={() => navigate('/admin/forecast')}
+                className="w-full rounded-xl bg-white text-[#205a82] py-3 text-sm font-bold shadow-md hover:bg-gray-50 transition-colors"
+              >
+                View Full Forecast →
               </button>
             </div>
           </div>

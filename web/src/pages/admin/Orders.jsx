@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ClipboardList, ArrowLeft, ArrowRight, Eye } from 'lucide-react';
 
 const ORDERS_PER_PAGE = 6;
@@ -22,12 +23,38 @@ export default function Orders({
   onOpenReceiptPreview,
   onOpenRejectModal,
 }) {
+  const [confirmAction, setConfirmAction] = useState(null);
+
   const filterOptions = [
     { key: 'pending_payment', label: 'Pending Payment Verification', count: pendingOrders },
     { key: 'processing', label: 'Processing', count: processingOrders },
     { key: 'delivered', label: 'Delivered', count: deliveredOrders },
     { key: 'cancelled', label: 'Rejected / Cancelled', count: cancelledOrders },
   ];
+
+  const openApproveConfirm = (order) => {
+    setConfirmAction({ type: 'approve', order });
+  };
+
+  const openRejectConfirm = (order) => {
+    setConfirmAction({ type: 'reject', order });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmAction(null);
+  };
+
+  const handleConfirmAction = () => {
+    if (!confirmAction?.order) return;
+
+    if (confirmAction.type === 'approve') {
+      onApprovePayment(confirmAction.order);
+    } else if (confirmAction.type === 'reject') {
+      onOpenRejectModal(confirmAction.order);
+    }
+
+    closeConfirmModal();
+  };
 
   const getStatusBadge = (order) => {
     const normalizedStatus = (order.status || '').toLowerCase();
@@ -164,14 +191,14 @@ export default function Orders({
                         {getStatusBadge(order).label === 'Pending Payment Verification' ? (
                           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                             <button
-                              onClick={() => onApprovePayment(order)}
+                              onClick={() => openApproveConfirm(order)}
                               disabled={verificationLoadingId === order.id}
                               className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                             >
                               {verificationLoadingId === order.id ? 'Approving...' : 'Approve'}
                             </button>
                             <button
-                              onClick={() => onOpenRejectModal(order)}
+                              onClick={() => openRejectConfirm(order)}
                               disabled={verificationLoadingId === order.id}
                               className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition ${verificationLoadingId === order.id ? 'bg-slate-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
                             >
@@ -204,6 +231,35 @@ export default function Orders({
             </div>
           </div>
         </>
+      )}
+
+      {confirmAction && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">
+              {confirmAction.type === 'approve' ? 'Approve payment?' : 'Reject payment?'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {confirmAction.type === 'approve'
+                ? 'This will mark the payment as approved and move the order forward.'
+                : 'This will open the rejection flow for this order.'}
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={closeConfirmModal}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmAction}
+                className={`rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${confirmAction.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+              >
+                {confirmAction.type === 'approve' ? 'Yes, approve' : 'Yes, reject'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

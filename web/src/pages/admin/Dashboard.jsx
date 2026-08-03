@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bell, ClipboardList, Boxes, Route as RouteIcon, Menu } from 'lucide-react';
+import { Menu, TrendingUp } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -9,7 +9,7 @@ import Overview from './Overview';
 import Orders from './Orders';
 import Inventory from './Inventory';
 import Deliveries from './Deliveries';
-import Alerts from './Alerts';
+import DemandForecastPage from './DemandForecastPage';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -20,8 +20,8 @@ export default function AdminDashboard() {
     ? 'inventory'
     : location.pathname.includes('/deliveries')
     ? 'deliveries'
-    : location.pathname.includes('/alerts')
-    ? 'alerts'
+    : location.pathname.includes('/forecast')
+    ? 'forecast'
     : 'overview';
   const [iotData, setIotData] = useState({
     temperature: 'Loading...',
@@ -42,7 +42,7 @@ export default function AdminDashboard() {
   const [adminUid, setAdminUid] = useState(null);
   const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
 
-  const ORDERS_PER_PAGE = 6;
+  const ORDERS_PER_PAGE = 10;
 
   // Get today's date for the modern header
   const todayDate = new Date().toLocaleDateString('en-US', { 
@@ -106,6 +106,7 @@ export default function AdminDashboard() {
   const deliveredOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'delivered').length;
   const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
   const completedOrders = processingOrders + deliveredOrders;
+  const unassignedDeliveries = allOrders.filter((order) => !order.assignedDriverId).length;
 
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
@@ -275,30 +276,39 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1">
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             <li>
-              <Link to="/admin/overview" className={`flex w-full items-center rounded-xl p-3 text-sm font-semibold transition-all ${activeView === 'overview' ? 'bg-[#4091c9] text-white shadow-md shadow-blue-500/20' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <LayoutDashboard className="mr-3 h-5 w-5" /> Overview
+              <Link to="/admin/overview" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'overview' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Overview</span>
               </Link>
             </li>
             <li>
-              <Link to="/admin/orders" className={`flex w-full items-center rounded-xl p-3 text-sm font-semibold transition-all ${activeView === 'orders' ? 'bg-[#4091c9] text-white shadow-md shadow-blue-500/20' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <ClipboardList className="mr-3 h-5 w-5" /> Orders
+              <Link to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Orders</span>
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  {pendingOrders || 3}
+                </span>
               </Link>
             </li>
             <li>
-              <Link to="/admin/inventory" className={`flex w-full items-center rounded-xl p-3 text-sm font-semibold transition-all ${activeView === 'inventory' ? 'bg-[#4091c9] text-white shadow-md shadow-blue-500/20' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <Boxes className="mr-3 h-5 w-5" /> Inventory
+              <Link to="/admin/inventory" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Inventory</span>
               </Link>
             </li>
             <li>
-              <Link to="/admin/deliveries" className={`flex w-full items-center rounded-xl p-3 text-sm font-semibold transition-all ${activeView === 'deliveries' ? 'bg-[#4091c9] text-white shadow-md shadow-blue-500/20' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <RouteIcon className="mr-3 h-5 w-5" /> Deliveries
+              <Link to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Deliveries</span>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  {unassignedDeliveries}
+                </span>
               </Link>
             </li>
             <li>
-              <Link to="/admin/alerts" className={`flex w-full items-center rounded-xl p-3 text-sm font-semibold transition-all ${activeView === 'alerts' ? 'bg-[#4091c9] text-white shadow-md shadow-blue-500/20' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <Bell className="mr-3 h-5 w-5" /> Alerts
+              <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Predictive Analysis</span>
+                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
+                  1
+                </span>
               </Link>
             </li>
           </ul>
@@ -344,7 +354,7 @@ export default function AdminDashboard() {
             />
             <Route path="inventory" element={<Inventory />} />
             <Route path="deliveries" element={<Deliveries />} />
-            <Route path="alerts" element={<Alerts />} />
+            <Route path="forecast" element={<DemandForecastPage />} />
             <Route path="*" element={<Overview iotData={iotData} todayDate={todayDate} />} />
           </Routes>
         </div>

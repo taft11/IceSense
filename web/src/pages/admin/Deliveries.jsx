@@ -18,6 +18,7 @@ export default function Deliveries() {
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [confirmAssignment, setConfirmAssignment] = useState(null);
   const ORDERS_PER_PAGE = 6;
 
   useEffect(() => {
@@ -62,10 +63,19 @@ export default function Deliveries() {
     };
   }, []);
 
-  const handleAssignDriver = async (orderId, driverId) => {
-    if (!orderId) return;
-
+  const openAssignConfirm = (orderId, driverId) => {
     const selectedDriver = drivers.find((driver) => driver.id === driverId);
+    setConfirmAssignment({ orderId, driverId, selectedDriver });
+  };
+
+  const closeAssignConfirm = () => {
+    setConfirmAssignment(null);
+  };
+
+  const handleAssignDriver = async () => {
+    if (!confirmAssignment?.orderId) return;
+
+    const { orderId, driverId, selectedDriver } = confirmAssignment;
 
     try {
       setSavingOrderId(orderId);
@@ -83,6 +93,7 @@ export default function Deliveries() {
       setError('Unable to assign a driver right now.');
     } finally {
       setSavingOrderId(null);
+      closeAssignConfirm();
     }
   };
 
@@ -195,7 +206,7 @@ export default function Deliveries() {
                         <td className="px-4 py-3">
                           <select
                             value={order.assignedDriverId || ''}
-                            onChange={(event) => handleAssignDriver(order.id, event.target.value)}
+                            onChange={(event) => openAssignConfirm(order.id, event.target.value)}
                             disabled={drivers.length === 0 || savingOrderId === order.id}
                             className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#4091c9]"
                           >
@@ -216,7 +227,7 @@ export default function Deliveries() {
                               {order.deliveryStatus || (order.assignedDriverId ? 'Assigned' : 'Unassigned')}
                             </span>
                             <button
-                              onClick={() => handleAssignDriver(order.id, order.assignedDriverId || '')}
+                              onClick={() => openAssignConfirm(order.id, order.assignedDriverId || '')}
                               disabled={drivers.length === 0 || savingOrderId === order.id}
                               className="w-fit rounded-lg bg-[#4091c9] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-slate-300"
                             >
@@ -255,6 +266,33 @@ export default function Deliveries() {
             </div>
           </div>
         </>
+      )}
+
+      {confirmAssignment && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">Confirm driver assignment</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {confirmAssignment.selectedDriver
+                ? `Assign this order to ${confirmAssignment.selectedDriver.fullName || confirmAssignment.selectedDriver.name || confirmAssignment.selectedDriver.displayName || confirmAssignment.selectedDriver.email || 'the selected driver'}?`
+                : 'Remove the current driver assignment from this order?'}
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                onClick={closeAssignConfirm}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignDriver}
+                className="rounded-2xl bg-[#4091c9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+              >
+                Yes, confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
