@@ -48,6 +48,7 @@ web/*.json
 # Sensitive keys
 serviceAccountKey.json
 .csv
+.py
 
 # Environment Variables
 .env
