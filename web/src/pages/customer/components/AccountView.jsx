@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import LocationPicker from './LocationPicker';
 
@@ -26,12 +27,30 @@ export default function AccountView({
   passwordError,
   passwordMessage,
 }) {
+  const [showAddressForm, setShowAddressForm] = useState(false);
+
   const tabClass = (section) =>
     `rounded-full px-4 py-2 text-sm font-semibold transition ${
       accountSection === section
         ? 'bg-[#4091c9] text-white shadow-sm'
         : 'bg-slate-100 text-slate-700 hover:bg-sky-50 hover:text-[#4091c9]'
     }`;
+
+  const shouldShowAddressForm = showAddressForm || Boolean(addressEditingId);
+
+  const handleShowAddressForm = () => {
+    setShowAddressForm(true);
+  };
+
+  const handleCancelAddressForm = () => {
+    setShowAddressForm(false);
+    onResetAddressForm();
+  };
+
+  const handleStartEditingAddress = (address) => {
+    setShowAddressForm(true);
+    onStartEditingAddress(address);
+  };
 
   return (
     <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -54,26 +73,27 @@ export default function AccountView({
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-        <div className="rounded-[24px] border border-sky-100 bg-sky-50 p-5">
-          <p className="text-sm font-semibold text-[#4091c9]">Account overview</p>
-          <h3 className="mt-2 text-lg font-bold text-slate-900">Your account is ready for smooth delivery planning.</h3>
-          <p className="mt-2 text-sm text-slate-600">Update your details whenever you need to keep orders, addresses, and delivery access accurate.</p>
-        </div>
-        <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-600">Account status</p>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Active</span>
+      {accountSection === 'profile' && (
+        <div className="mb-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+          <div className="rounded-[24px] border border-sky-100 bg-sky-50 p-5">
+            <p className="text-sm font-semibold text-[#4091c9]">Account overview</p>
+            <h3 className="mt-2 text-lg font-bold text-slate-900">Your account is ready for smooth delivery planning.</h3>
+            <p className="mt-2 text-sm text-slate-600">Update your details whenever you need to keep orders, addresses, and delivery access accurate.</p>
           </div>
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
+          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-center justify-between">
-              <span>Saved addresses</span>
-              <span className="font-semibold text-slate-900">{addresses.length}</span>
+              <p className="text-sm font-semibold text-slate-600">Account status</p>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Active</span>
             </div>
-
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="flex items-center justify-between">
+                <span>Saved addresses</span>
+                <span className="font-semibold text-slate-900">{addresses.length}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {accountError && (
         <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -183,18 +203,71 @@ export default function AccountView({
 
       {accountSection === 'addresses' && (
         <div className="space-y-6">
-          <form onSubmit={onAddressSave} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">{addressEditingId ? 'Edit address' : 'Add a new address'}</h3>
-                <p className="mt-1 text-sm text-slate-600">Save delivery locations that can be reused for future orders.</p>
-              </div>
-              {addressEditingId && (
-                <button type="button" onClick={onResetAddressForm} className="text-sm font-semibold text-[#4091c9]">
-                  Cancel edit
-                </button>
-              )}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Saved addresses</h3>
+              <p className="mt-1 text-sm text-slate-600">Manage your delivery locations below.</p>
             </div>
+            {!shouldShowAddressForm && (
+              <button
+                type="button"
+                onClick={handleShowAddressForm}
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#4091c9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+              >
+                <Plus className="h-4 w-4" /> Add new address
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {addresses.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+                No addresses yet. Add your first delivery location to get started.
+              </div>
+            ) : (
+              addresses.map((address) => (
+                <div key={address.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{address.label || 'Address'}</p>
+                        {address.isDefault && (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Default</span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">{address.street}</p>
+                      <p className="text-sm text-slate-600">{[address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!address.isDefault && (
+                        <button type="button" onClick={() => onSetDefaultAddress(address.id)} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-[#4091c9] hover:text-[#4091c9]">
+                          Set as default
+                        </button>
+                      )}
+                      <button type="button" onClick={() => handleStartEditingAddress(address)} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-[#4091c9] hover:text-[#4091c9]">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => onRemoveAddress(address.id)} className="rounded-full border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50">
+                        <Trash2 className="mr-1 inline h-4 w-4" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {shouldShowAddressForm && (
+            <form onSubmit={onAddressSave} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">{addressEditingId ? 'Edit address' : 'Add a new address'}</h3>
+                  <p className="mt-1 text-sm text-slate-600">Save delivery locations that can be reused for future orders.</p>
+                </div>
+                <button type="button" onClick={handleCancelAddressForm} className="text-sm font-semibold text-[#4091c9]">
+                  {addressEditingId ? 'Cancel edit' : 'Cancel'}
+                </button>
+              </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
@@ -266,52 +339,15 @@ export default function AccountView({
               Set as default address
             </label>
 
-            <button
-              type="submit"
-              disabled={accountSaving}
-              className={`mt-4 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition ${accountSaving ? 'cursor-not-allowed bg-[#7aa8d1]' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
-            >
-              <Plus className="h-4 w-4" /> {addressEditingId ? 'Update Address' : 'Add Address'}
-            </button>
-          </form>
-
-          <div className="space-y-3">
-            {addresses.length === 0 ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-                No addresses yet. Add your first delivery location above.
-              </div>
-            ) : (
-              addresses.map((address) => (
-                <div key={address.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900">{address.label || 'Address'}</p>
-                        {address.isDefault && (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Default</span>
-                        )}
-                      </div>
-                      <p className="mt-2 text-sm text-slate-600">{address.street}</p>
-                      <p className="text-sm text-slate-600">{[address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {!address.isDefault && (
-                        <button type="button" onClick={() => onSetDefaultAddress(address.id)} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-[#4091c9] hover:text-[#4091c9]">
-                          Set as default
-                        </button>
-                      )}
-                      <button type="button" onClick={() => onStartEditingAddress(address)} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-[#4091c9] hover:text-[#4091c9]">
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => onRemoveAddress(address.id)} className="rounded-full border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50">
-                        <Trash2 className="mr-1 inline h-4 w-4" /> Remove
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+              <button
+                type="submit"
+                disabled={accountSaving}
+                className={`mt-4 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition ${accountSaving ? 'cursor-not-allowed bg-[#7aa8d1]' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+              >
+                <Plus className="h-4 w-4" /> {addressEditingId ? 'Update Address' : 'Add Address'}
+              </button>
+            </form>
+          )}
         </div>
       )}
 
