@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../services/firebase';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../services/firebase';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function Login() {
@@ -9,6 +10,10 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +30,9 @@ export default function Login() {
         await signInWithEmailAndPassword(auth, email, password);
         navigate('/portal');
       } else {
+        if (!firstName.trim() || !lastName.trim() || !contactNumber.trim()) {
+          throw new Error('Please fill in your first name, last name, and phone number.');
+        }
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match!');
         }
@@ -32,7 +40,15 @@ export default function Login() {
           throw new Error('Password must be at least 6 characters.');
         }
 
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          firstName: firstName.trim(),
+          middleName: middleName.trim(),
+          lastName: lastName.trim(),
+          email: userCredential.user.email || email,
+          contactNumber: contactNumber.trim(),
+          createdAt: serverTimestamp(),
+        }, { merge: true });
         navigate('/portal');
       }
     } catch (err) {
@@ -55,6 +71,10 @@ export default function Login() {
     setError('');
     setPassword('');
     setConfirmPassword('');
+    setFirstName('');
+    setMiddleName('');
+    setLastName('');
+    setContactNumber('');
   };
 
   return (
@@ -86,6 +106,82 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!isLogin && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="relative">
+                  <input
+                    id="firstName"
+                    type="text"
+                    required={!isLogin}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder=" "
+                    className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
+                  />
+                  <label
+                    htmlFor="firstName"
+                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                  >
+                    First Name <span className="text-gray-400">*</span>
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    id="middleName"
+                    type="text"
+                    value={middleName}
+                    onChange={(e) => setMiddleName(e.target.value)}
+                    placeholder=" "
+                    className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
+                  />
+                  <label
+                    htmlFor="middleName"
+                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                  >
+                    Middle Name
+                  </label>
+                </div>
+
+                <div className="relative sm:col-span-2">
+                  <input
+                    id="lastName"
+                    type="text"
+                    required={!isLogin}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder=" "
+                    className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
+                  />
+                  <label
+                    htmlFor="lastName"
+                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                  >
+                    Last Name <span className="text-gray-400">*</span>
+                  </label>
+                </div>
+
+                <div className="relative sm:col-span-2">
+                  <input
+                    id="contactNumber"
+                    type="tel"
+                    inputMode="numeric"
+                    required={!isLogin}
+                    value={contactNumber}
+                    onChange={(e) => setContactNumber(e.target.value)}
+                    placeholder=" "
+                    className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
+                  />
+                  <label
+                    htmlFor="contactNumber"
+                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                  >
+                    Phone Number <span className="text-gray-400">*</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="relative">
               <input
                 id="email"

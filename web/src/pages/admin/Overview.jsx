@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 export default function Overview({ iotData, todayDate }) {
   const navigate = useNavigate();
   const tomorrowDemandKg = 780;
+  const dailyTargetKg = 100;
+  const stockProducedKg = Number(iotData?.stockProducedKg || 0);
+  const productionTargetPercent = stockProducedKg > 0 ? Math.round((stockProducedKg / dailyTargetKg) * 100) : 0;
 
   return (
     <div className="animate-fade-in overview-page">
@@ -56,10 +59,10 @@ export default function Overview({ iotData, todayDate }) {
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-slate-900">{iotData.sacksProduced}</p>
-              <span className="text-sm text-slate-500">Sacks</span>
+              <p className="text-3xl font-bold text-slate-900">{stockProducedKg.toFixed(2)}</p>
+              <span className="text-sm text-slate-500">kg</span>
             </div>
-            <p className="mt-3 text-sm text-slate-500">🟢 124% of daily target (100 Sacks)</p>
+            <p className="mt-3 text-sm text-slate-500">🟢 {productionTargetPercent}% of daily target ({dailyTargetKg} kg)</p>
           </div>
         </div>
 

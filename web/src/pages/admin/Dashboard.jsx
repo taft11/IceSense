@@ -27,7 +27,7 @@ export default function AdminDashboard() {
     temperature: 'Loading...',
     humidity: 'Loading...',
     waterLevel: 'Loading...',
-    sacksProduced: 124,
+    stockProducedKg: 0,
     activeTrucks: 3,
   });
   const [allOrders, setAllOrders] = useState([]);
@@ -41,6 +41,7 @@ export default function AdminDashboard() {
   const [rejectReason, setRejectReason] = useState('');
   const [adminUid, setAdminUid] = useState(null);
   const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
+  const [activeDateFilter, setActiveDateFilter] = useState('');
 
   const ORDERS_PER_PAGE = 10;
 
@@ -86,17 +87,42 @@ export default function AdminDashboard() {
     return 'pending_payment';
   };
 
+  const getOrderDateValue = (order) => {
+    if (!order?.createdAt) return null;
+
+    const createdAt = typeof order.createdAt?.toDate === 'function'
+      ? order.createdAt.toDate()
+      : order.createdAt instanceof Date
+        ? order.createdAt
+        : new Date(order.createdAt);
+
+    if (Number.isNaN(createdAt.getTime())) {
+      return null;
+    }
+
+    return createdAt.toISOString().split('T')[0];
+  };
+
   const filteredOrders = allOrders.filter((order) => {
-    if (activeOrderFilter === 'processing') {
-      return getOrderStatusKey(order) === 'processing';
-    }
-    if (activeOrderFilter === 'delivered') {
-      return getOrderStatusKey(order) === 'delivered';
-    }
-    if (activeOrderFilter === 'cancelled') {
-      return getOrderStatusKey(order) === 'cancelled';
-    }
-    return getOrderStatusKey(order) === 'pending_payment';
+    const matchesStatus = (() => {
+      if (activeOrderFilter === 'all') {
+        return true;
+      }
+      if (activeOrderFilter === 'processing') {
+        return getOrderStatusKey(order) === 'processing';
+      }
+      if (activeOrderFilter === 'delivered') {
+        return getOrderStatusKey(order) === 'delivered';
+      }
+      if (activeOrderFilter === 'cancelled') {
+        return getOrderStatusKey(order) === 'cancelled';
+      }
+      return getOrderStatusKey(order) === 'pending_payment';
+    })();
+
+    const matchesDate = !activeDateFilter || getOrderDateValue(order) === activeDateFilter;
+
+    return matchesStatus && matchesDate;
   });
 
   const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
@@ -110,8 +136,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
+    const inventoryRef = ref(database, 'inventory/scale_1');
 
-    const unsubscribe = onValue(iotRef, (snapshot) => {
+    const unsubscribeIot = onValue(iotRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
         const temp = data.Environment?.temperature;
@@ -127,7 +154,31 @@ export default function AdminDashboard() {
       }
     });
 
-    return () => unsubscribe();
+    const unsubscribeInventory = onValue(inventoryRef, (snapshot) => {
+      const value = snapshot.val();
+      const breakdown = value?.sacks_breakdown || {};
+      const totalSacks = Number(value?.total_sacks_count ?? 0);
+      const breakdownTotalKg = [
+        { key: '35kg_sacks', weight: 35 },
+        { key: '50kg_sacks', weight: 50 },
+        { key: '5kg_sacks', weight: 5 },
+      ].reduce((sum, item) => {
+        const count = Number(breakdown?.[item.key] ?? 0);
+        return sum + count * item.weight;
+      }, 0);
+
+      const stockProducedKg = breakdownTotalKg > 0 ? breakdownTotalKg : totalSacks > 0 ? totalSacks : 0;
+
+      setIotData((prev) => ({
+        ...prev,
+        stockProducedKg,
+      }));
+    });
+
+    return () => {
+      unsubscribeIot();
+      unsubscribeInventory();
+    };
   }, []);
 
   useEffect(() => {
@@ -195,7 +246,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setOrdersPage(1);
-  }, [activeOrderFilter]);
+  }, [activeOrderFilter, activeDateFilter]);
 
   const handleSignOut = async () => {
     try {
@@ -323,7 +374,7 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <main className="ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
-        <div className="mx-auto max-w-6xl pb-12">
+        <div className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6">
           <Routes>
             <Route index element={<Overview iotData={iotData} todayDate={todayDate} />} />
             <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} />} />
@@ -344,6 +395,8 @@ export default function AdminDashboard() {
                   setOrdersPage={setOrdersPage}
                   activeOrderFilter={activeOrderFilter}
                   setActiveOrderFilter={setActiveOrderFilter}
+                  activeDateFilter={activeDateFilter}
+                  setActiveDateFilter={setActiveDateFilter}
                   formatDate={formatDate}
                   verificationLoadingId={verificationLoadingId}
                   onApprovePayment={handleApprovePayment}

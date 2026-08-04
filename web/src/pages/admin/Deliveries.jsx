@@ -217,23 +217,15 @@ export default function Deliveries() {
                               </option>
                             ))}
                           </select>
+                          <p className="mt-2 text-xs text-gray-500">Choose a driver to confirm the assignment.</p>
                           {order.assignedDriverName && (
-                            <p className="mt-2 text-xs text-gray-500">Assigned: {order.assignedDriverName}</p>
+                            <p className="mt-1 text-xs text-gray-500">Assigned: {order.assignedDriverName}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex flex-col gap-2">
-                            <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${order.assignedDriverId ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {order.deliveryStatus || (order.assignedDriverId ? 'Assigned' : 'Unassigned')}
-                            </span>
-                            <button
-                              onClick={() => openAssignConfirm(order.id, order.assignedDriverId || '')}
-                              disabled={drivers.length === 0 || savingOrderId === order.id}
-                              className="w-fit rounded-lg bg-[#4091c9] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:bg-slate-300"
-                            >
-                              {savingOrderId === order.id ? 'Saving...' : 'Save'}
-                            </button>
-                          </div>
+                          <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${order.assignedDriverId ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {order.deliveryStatus || (order.assignedDriverId ? 'Assigned' : 'Unassigned')}
+                          </span>
                         </td>
                       </tr>
                     );
