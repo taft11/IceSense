@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { ClipboardList, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { db } from '../../services/firebase';
 
 const ORDERS_PER_PAGE = 6;
 
@@ -27,6 +29,9 @@ export default function Orders({
 }) {
   const [confirmAction, setConfirmAction] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [podDataByOrderId, setPodDataByOrderId] = useState({});
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   const filterOptions = [
     { key: 'all', label: 'All', count: pendingOrders + processingOrders + deliveredOrders + cancelledOrders },
@@ -97,7 +102,7 @@ export default function Orders({
     return [order.id, order.customerName, order.customerEmail]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query));
-  }).slice(0, 9);
+  });
 
   const getOrderDateLabel = (order) => {
     if (!order?.createdAt) return 'No date';
@@ -141,6 +146,113 @@ export default function Orders({
     const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
     return paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending' || paymentStatus === 'awaiting_verification';
   };
+
+  const getReceiptPreviewUrl = (order) => {
+    return order?.receiptUrl || order?.paymentReceiptUrl || order?.paymentProofUrl || order?.proofImageUrl || order?.proofUrl || order?.podImageUrl || order?.deliveryProofUrl || null;
+  };
+
+  const toggleOrderDetails = (orderId) => {
+    setExpandedOrderId((current) => (current === orderId ? null : orderId));
+  };
+
+  const isDeliveredOrder = (order) => {
+    const normalizedStatus = (order.status || '').toLowerCase();
+    const paymentStatus = (order.paymentStatus || '').toLowerCase();
+
+    return (
+      normalizedStatus === 'delivered' ||
+      normalizedStatus === 'completed' ||
+      normalizedStatus === 'done' ||
+      normalizedStatus === 'finished' ||
+      normalizedStatus === 'delivery completed' ||
+      paymentStatus === 'delivered'
+    );
+  };
+
+  const formatTimestamp = (value) => {
+    if (!value) return 'Unavailable';
+
+    if (typeof value?.toDate === 'function') {
+      return value.toDate().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    }
+
+    if (value instanceof Date) {
+      return value.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return 'Unavailable';
+  };
+
+  useEffect(() => {
+    if (!expandedOrderId) return;
+
+    const order = paginatedOrders.find((item) => item.id === expandedOrderId);
+    if (!order || !isDeliveredOrder(order)) return;
+
+    let active = true;
+
+    const loadPOD = async () => {
+      const directProofUrl = order?.proofImageUrl || order?.proofUrl || order?.podImageUrl || order?.deliveryProofUrl;
+
+      if (directProofUrl) {
+        if (!active) return;
+
+        setPodDataByOrderId((current) => ({
+          ...current,
+          [order.id]: {
+            imageUrl: directProofUrl,
+            deliveredAt: order?.deliveredAt || order?.deliveryTimestamp || null,
+            driverName: order?.driverName || order?.deliveredBy || 'Unknown driver',
+          },
+        }));
+        return;
+      }
+
+      try {
+        const proofsRef = collection(db, 'proofs');
+        const podQuery = query(proofsRef, where('orderId', '==', String(order.id)));
+        const snapshot = await getDocs(podQuery);
+
+        if (!active) return;
+
+        const podDoc = snapshot.docs[0]?.data() ?? null;
+        setPodDataByOrderId((current) => ({
+          ...current,
+          [order.id]: podDoc,
+        }));
+      } catch (error) {
+        console.error('Failed to fetch POD data:', error);
+        if (active) {
+          setPodDataByOrderId((current) => ({
+            ...current,
+            [order.id]: null,
+          }));
+        }
+      }
+    };
+
+    loadPOD();
+
+    return () => {
+      active = false;
+    };
+  }, [expandedOrderId, paginatedOrders]);
 
   return (
     <div className="w-full max-w-7xl min-w-0 overflow-hidden rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
@@ -230,68 +342,130 @@ export default function Orders({
                   {filteredDisplayOrders.map((order) => {
                     const fullfillmentBadge = getFulfillmentBadge(order);
                     const paymentMethodLabel = getPaymentMethodLabel(order);
+                    const receiptPreviewUrl = getReceiptPreviewUrl(order);
 
                     return (
-                      <tr key={order.id} className="align-top">
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-800">#{order.id?.slice(0, 8).toUpperCase()}</p>
-                          <p className="mt-1 text-xs text-gray-500">{getOrderDateLabel(order)}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-800">{order.customerName || 'Unknown customer'}</p>
-                          <p className="text-xs text-gray-500">{order.customerEmail || 'No email'}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            {(order.items || []).map((item, index) => (
-                              <p key={`${order.id}-${index}`} className="text-gray-700">
-                                {item.name} × {item.quantity}
-                              </p>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${fullfillmentBadge.className}`}>
-                            {fullfillmentBadge.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <p className="font-semibold text-gray-800">₱{Number(order.total || 0).toFixed(2)}</p>
-                            <p className="text-xs text-gray-500">{paymentMethodLabel}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(order).className}`}>
-                            {getStatusBadge(order).label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {isPendingVerification(order) ? (
-                            <div className="flex justify-center gap-2">
-                              <button
-                                onClick={() => openApproveConfirm(order)}
-                                className="rounded-full bg-[#4091c9] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d75aa]"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => openRejectConfirm(order)}
-                                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
-                              >
-                                Reject
-                              </button>
+                      <Fragment key={order.id}>
+                        <tr className="align-top">
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-gray-800">#{order.id?.slice(0, 8).toUpperCase()}</p>
+                            <p className="mt-1 text-xs text-gray-500">{getOrderDateLabel(order)}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-gray-800">{order.customerName || 'Unknown customer'}</p>
+                            <p className="text-xs text-gray-500">{order.customerEmail || 'No email'}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="space-y-1">
+                              {(order.items || []).map((item, index) => (
+                                <p key={`${order.id}-${index}`} className="text-gray-700">
+                                  {item.name} × {item.quantity}
+                                </p>
+                              ))}
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => openApproveConfirm(order)}
-                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
-                            >
-                              Details
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${fullfillmentBadge.className}`}>
+                              {fullfillmentBadge.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="space-y-1">
+                              <p className="font-semibold text-gray-800">₱{Number(order.total || 0).toFixed(2)}</p>
+                              <p className="text-xs text-gray-500">{paymentMethodLabel}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(order).className}`}>
+                              {getStatusBadge(order).label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isPendingVerification(order) ? (
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => receiptPreviewUrl && onOpenReceiptPreview(receiptPreviewUrl)}
+                                  disabled={!receiptPreviewUrl}
+                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  View Payment
+                                </button>
+                                <button
+                                  onClick={() => openApproveConfirm(order)}
+                                  className="rounded-full bg-[#4091c9] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d75aa]"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => openRejectConfirm(order)}
+                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleOrderDetails(order.id)}
+                                className="text-sm font-semibold text-[#4091c9] underline-offset-2 transition hover:text-[#2d75aa] hover:underline"
+                              >
+                                {expandedOrderId === order.id ? 'Hide details' : 'Details'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {expandedOrderId === order.id && !isPendingVerification(order) && (
+                          <tr>
+                            <td colSpan="7" className="px-4 pb-4">
+                              <div className="grid grid-cols-1 gap-6 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                                <div>
+                                  <p className="font-semibold text-slate-800">Customer Details</p>
+                                  <p className="mt-2 text-sm text-slate-600">{order.customerName || 'Unknown customer'}</p>
+                                  <p className="text-sm text-slate-600">{order.customerEmail || 'No email'}</p>
+                                  <p className="mt-2 text-xs text-slate-500">Order placed: {getOrderDateLabel(order)}</p>
+                                </div>
+
+                                <div>
+                                  <p className="font-semibold text-slate-800">Order Summary</p>
+                                  <p className="mt-2 text-sm text-slate-600">Payment: {paymentMethodLabel}</p>
+                                  <p className="text-sm text-slate-600">Fulfillment: {fullfillmentBadge.label}</p>
+                                  <p className="text-sm text-slate-600">Total weight: {getTotalWeightKg(order).toFixed(2)} kg</p>
+                                  <p className="mt-2 text-xs text-slate-500">Total amount: ₱{Number(order.total || 0).toFixed(2)}</p>
+                                </div>
+
+                                <div>
+                                  <p className="font-semibold text-slate-800">Proof of Delivery</p>
+                                  {isDeliveredOrder(order) ? (
+                                    podDataByOrderId[order.id]?.imageUrl ? (
+                                      <div className="mt-3">
+                                        <img
+                                          src={podDataByOrderId[order.id].imageUrl}
+                                          alt="Proof of delivery"
+                                          className="h-28 w-28 cursor-pointer rounded-lg border border-slate-300 object-cover shadow-sm transition hover:opacity-90"
+                                          onClick={() => setLightboxImage(podDataByOrderId[order.id].imageUrl)}
+                                        />
+                                        <div className="mt-3 text-sm text-slate-600">
+                                          <p>Delivered on: {formatTimestamp(podDataByOrderId[order.id].deliveredAt || podDataByOrderId[order.id].timestamp)}</p>
+                                          <p>Driver: {podDataByOrderId[order.id].driverName || 'Unknown driver'}</p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="mt-3 flex h-28 items-center justify-center rounded-lg border border-slate-300 bg-slate-200/70 text-sm text-slate-500">
+                                        No Proof of Delivery Uploaded
+                                      </div>
+                                    )
+                                  ) : (
+                                    <div className="mt-3 flex h-28 items-center justify-center rounded-lg border border-slate-300 bg-slate-200/70 text-sm text-slate-500">
+                                      No Proof of Delivery Uploaded
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -314,6 +488,21 @@ export default function Orders({
             </div>
           </div>
         </>
+      )}
+
+      {lightboxImage && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-sm">
+          <div className="relative w-full max-w-5xl rounded-2xl bg-white p-3 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setLightboxImage(null)}
+              className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+            >
+              Close
+            </button>
+            <img src={lightboxImage} alt="Proof of delivery preview" className="max-h-[80vh] w-full rounded-xl object-contain" />
+          </div>
+        </div>
       )}
 
       {confirmAction && (
