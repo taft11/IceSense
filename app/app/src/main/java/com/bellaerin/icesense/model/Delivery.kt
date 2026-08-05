@@ -8,5 +8,6 @@ data class Delivery(
     val longitude: Double,
     val status: String = "pending",
     val isConfirmed: Boolean = false,
-    val proofImageUri: String? = null
+    val proofImageUri: String? = null,
+    val deliverySlot: String? = null
 )

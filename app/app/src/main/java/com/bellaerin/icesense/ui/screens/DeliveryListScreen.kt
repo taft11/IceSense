@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -242,34 +243,78 @@ fun DeliveryListScreen(
                     }
                 }
 
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(filteredDeliveries) { delivery ->
-                        DeliveryCard(
-                            delivery = delivery,
-                            onOpenMap = {
-                                if (hasLocationPermission) {
-                                    openGoogleMaps(context, delivery.latitude, delivery.longitude)
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    if (selectedTabIndex == 0) {
+                        val slots = listOf("8:00 AM - 11:00 AM", "11:00 AM - 2:00 PM", "2:00 PM - 5:00 PM")
+                        
+                        slots.forEach { slot ->
+                            val slotDeliveries = filteredDeliveries.filter { it.deliverySlot == slot }
+                            if (slotDeliveries.isNotEmpty()) {
+                                item(key = "header_$slot") {
+                                    SlotHeader(slot)
                                 }
-                            },
-                            onConfirm = {
-                                if (hasLocationPermission) {
-                                    getCurrentLocation(context, fusedLocationClient) { _ ->
-                                        currentDeliveryId = delivery.id
-                                        if (hasCameraPermission) {
-                                            val uri = createImageUri(context)
-                                            tempPhotoUri = uri
-                                            cameraLauncher.launch(uri)
-                                        } else {
-                                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                        }
-                                    }
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                items(slotDeliveries, key = { it.id }) { delivery ->
+                                    DeliveryCardItem(
+                                        delivery = delivery,
+                                        hasLocationPermission = hasLocationPermission,
+                                        onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
+                                        onConfirmRequest = {
+                                            getCurrentLocation(context, fusedLocationClient) { _ ->
+                                                currentDeliveryId = delivery.id
+                                                if (hasCameraPermission) {
+                                                    val uri = createImageUri(context)
+                                                    tempPhotoUri = uri
+                                                    cameraLauncher.launch(uri)
+                                                } else {
+                                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                                }
+                                            }
+                                        },
+                                        onPermissionRequest = { permissionLauncher.launch(it) }
+                                    )
                                 }
                             }
-                        )
+                        }
+                        
+                        val otherDeliveries = filteredDeliveries.filter { it.deliverySlot !in slots }
+                        if (otherDeliveries.isNotEmpty()) {
+                            item(key = "header_others") {
+                                SlotHeader("Others")
+                            }
+                            items(otherDeliveries, key = { it.id }) { delivery ->
+                                DeliveryCardItem(
+                                    delivery = delivery,
+                                    hasLocationPermission = hasLocationPermission,
+                                    onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
+                                    onConfirmRequest = {
+                                        getCurrentLocation(context, fusedLocationClient) { _ ->
+                                            currentDeliveryId = delivery.id
+                                            if (hasCameraPermission) {
+                                                val uri = createImageUri(context)
+                                                tempPhotoUri = uri
+                                                cameraLauncher.launch(uri)
+                                            } else {
+                                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                            }
+                                        }
+                                    },
+                                    onPermissionRequest = { permissionLauncher.launch(it) }
+                                )
+                            }
+                        }
+                    } else {
+                        items(filteredDeliveries, key = { it.id }) { delivery ->
+                            DeliveryCardItem(
+                                delivery = delivery,
+                                hasLocationPermission = hasLocationPermission,
+                                onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
+                                onConfirmRequest = { /* Not needed for delivered */ },
+                                onPermissionRequest = { permissionLauncher.launch(it) }
+                            )
+                        }
                     }
                 }
             }
@@ -289,7 +334,37 @@ private fun createImageUri(context: Context): Uri {
 }
 
 @Composable
-fun DeliveryCard(delivery: Delivery, onOpenMap: () -> Unit, onConfirm: () -> Unit) {
+fun SlotHeader(slot: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Schedule,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = slot,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun DeliveryCardItem(
+    delivery: Delivery,
+    hasLocationPermission: Boolean,
+    onOpenMap: () -> Unit,
+    onConfirmRequest: () -> Unit,
+    onPermissionRequest: (String) -> Unit
+) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showImagePreview by remember { mutableStateOf(false) }
 
@@ -329,7 +404,7 @@ fun DeliveryCard(delivery: Delivery, onOpenMap: () -> Unit, onConfirm: () -> Uni
             confirmButton = {
                 Button(onClick = {
                     showConfirmDialog = false
-                    onConfirm()
+                    onConfirmRequest()
                 }) {
                     Text("Confirm")
                 }
@@ -371,6 +446,16 @@ fun DeliveryCard(delivery: Delivery, onOpenMap: () -> Unit, onConfirm: () -> Uni
                             text = delivery.address,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    if (delivery.deliverySlot != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = delivery.deliverySlot,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -420,7 +505,13 @@ fun DeliveryCard(delivery: Delivery, onOpenMap: () -> Unit, onConfirm: () -> Uni
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
-                        onClick = onOpenMap,
+                        onClick = {
+                            if (hasLocationPermission) {
+                                onOpenMap()
+                            } else {
+                                onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -429,7 +520,13 @@ fun DeliveryCard(delivery: Delivery, onOpenMap: () -> Unit, onConfirm: () -> Uni
                     
                     SwipeToConfirmButton(
                         modifier = Modifier.weight(2f),
-                        onConfirmed = { showConfirmDialog = true }
+                        onConfirmed = {
+                            if (hasLocationPermission) {
+                                showConfirmDialog = true
+                            } else {
+                                onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        }
                     )
                 }
             }

@@ -147,6 +147,7 @@ fun DeliveryApp(
                             val userId = doc.getString("userId")
                             val proofImageUri = doc.getString("proofImageUri")
                             val status = doc.getString("status") ?: ""
+                            val deliveryTimeSlot = doc.getString("deliveryTimeSlot")
 
                             if (userId != null) {
                                 Log.d("IceSense", "Fetching user $userId for order ${doc.id}")
@@ -201,7 +202,8 @@ fun DeliveryApp(
                                             longitude = lng,
                                             status = status,
                                             isConfirmed = status == "Delivered",
-                                            proofImageUri = proofImageUri
+                                            proofImageUri = proofImageUri,
+                                            deliverySlot = deliveryTimeSlot
                                         )
 
                                         fetchedCount++

@@ -1,24 +1,36 @@
-# Implementation Plan - Dark Mode Toggle
+# Implementation Plan: Group Deliveries by Time Slot on Dashboard
 
-Add a theme toggle (Dark/Light mode) to the navigation drawer (hamburger menu) to allow drivers to switch between themes manually.
+This plan outlines the changes to support delivery time slots. We will update the data model, fetch the time slot from Firestore, and organize the driver's dashboard into sections based on these slots (8:00 AM - 11:00 AM, 11:00 AM - 2:00 PM, 2:00 PM - 5:00 PM) to help drivers prioritize their deliveries.
 
 ## Proposed Changes
 
-### MainActivity
+### [Delivery.kt](file:///C:/Users/SEANEURY_/Desktop/New folder/IceSense/app/app/src/main/java/com/bellaerin/icesense/model/Delivery.kt)
 
-#### [MODIFY] [MainActivity.kt](file:///C:/Users/SEANEURY_/Desktop/New folder/IceSense/app/app/src/main/java/com/bellaerin/icesense/MainActivity.kt)
-- **Theme State**:
-    - Initialize `isDarkMode` by reading from `SharedPreferences`.
-    - Use `isSystemInDarkTheme()` as the default if no preference is saved.
-- **Theme Injection**: Pass `isDarkMode` to the `IceSenseTheme` wrapper in `setContent`.
-- **UI Component**:
-    - Add a `HorizontalDivider` above the logout item in the `ModalDrawerSheet`.
-    - Add a `NavigationDrawerItem` with a `Switch` in the `badge` or `trailingIcon` slot to toggle the theme.
-- **Persistence**: Save the new preference to `SharedPreferences` whenever the toggle is flipped.
+- **[MODIFY]** Add a `deliverySlot: String?` field to the `Delivery` data class to store the scheduled time.
+
+### [MainActivity.kt](file:///C:/Users/SEANEURY_/Desktop/New folder/IceSense/app/app/src/main/java/com/bellaerin/icesense/MainActivity.kt)
+
+- **[MODIFY]** Update the Firestore fetching logic within `DeliveryApp` to:
+    - Retrieve the `deliveryTimeSlot` field from the order document.
+    - Map it to the `deliverySlot` property when creating `Delivery` objects.
+
+### [DeliveryListScreen.kt](file:///C:/Users/SEANEURY_/Desktop/New folder/IceSense/app/app/src/main/java/com/bellaerin/icesense/ui/screens/DeliveryListScreen.kt)
+
+- **[MODIFY]** Update `DeliveryListScreen` to group "To Deliver" items by their `deliverySlot`.
+- **[MODIFY]** Implement section headers in the `LazyColumn` for each time slot:
+    - 8:00 AM - 11:00 AM
+    - 11:00 AM - 2:00 PM
+    - 2:00 PM - 5:00 PM
+    - Others/Unscheduled
+- **[MODIFY]** Update `DeliveryCard` to display the specific time slot inside the card for quick reference.
 
 ## Verification Plan
 
+### Automated Tests
+- Run `gradle build` to ensure the project compiles with the updated data model.
+
 ### Manual Verification
-- **Scenario 1**: Open the hamburger menu and toggle the switch. Verify the entire app theme changes immediately.
-- **Scenario 2**: Check visibility of the toggle in both themes.
-- **Scenario 3**: Verify the theme preference persists during the current app session (it will reset on app restart unless SharedPreferences is used, but for this task, runtime state is likely sufficient).
+1.  **Data Fetching**: Verify in Logcat that `deliveryTimeSlot` is being correctly retrieved from Firestore.
+2.  **Dashboard Organization**: Open the "To Deliver" tab and ensure deliveries are grouped under the correct time slot headers.
+3.  **Prioritization**: Confirm that the 8:00 AM - 11:00 AM section appears first, followed by later slots.
+4.  **Edge Case**: Check that deliveries without a valid time slot appear in an "Others" or "Unscheduled" section at the bottom.
