@@ -51,6 +51,38 @@ const normalizeForecastData = (data = {}) => ({
   },
 });
 
+const findForecastWindowLastYear = async (baseDate, dayCount = 7) => {
+  const startDate = addDays(baseDate, -365);
+  const requestedDates = Array.from({ length: dayCount }, (_, index) => addDays(startDate, index));
+
+  return Promise.all(
+    requestedDates.map(async (date, index) => {
+      const dateKey = formatDateKey(date);
+      const snapshot = await getDoc(doc(db, 'daily_analytics', dateKey));
+
+      if (!snapshot.exists()) {
+        return {
+          date: dateKey,
+          label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          ...getFallbackForecast(dateKey, index),
+        };
+      }
+
+      const docData = snapshot.data();
+      const normalized = normalizeForecastData(docData);
+      const label = docData.day_of_week
+        ? String(docData.day_of_week).slice(0, 3)
+        : date.toLocaleDateString('en-US', { weekday: 'short' });
+
+      return {
+        date: dateKey,
+        label,
+        ...normalized,
+      };
+    })
+  );
+};
+
 export default function useDemandForecast() {
   const [forecastDays, setForecastDays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,30 +95,8 @@ export default function useDemandForecast() {
       setLoading(true);
       setError('');
 
-      const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), index));
-      const dateKeys = requestedDates.map((date) => formatDateKey(date));
-
       try {
-        const results = await Promise.all(
-          dateKeys.map(async (dateKey, index) => {
-            const docRef = doc(db, 'daily_analytics', dateKey);
-            const snapshot = await getDoc(docRef);
-
-            if (!snapshot.exists()) {
-              return {
-                date: dateKey,
-                label: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' }),
-                ...getFallbackForecast(dateKey, index),
-              };
-            }
-
-            return {
-              date: dateKey,
-              label: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' }),
-              ...normalizeForecastData(snapshot.data()),
-            };
-          })
-        );
+        const results = await findForecastWindowLastYear(new Date(), 7);
 
         if (!isMounted) return;
         setForecastDays(results);
@@ -99,6 +109,9 @@ export default function useDemandForecast() {
         if (!isPermissionIssue) {
           setError('Unable to load demand forecast right now.');
         }
+
+        const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), -365 + index));
+        const dateKeys = requestedDates.map((date) => formatDateKey(date));
 
         setForecastDays(dateKeys.map((dateKey, index) => ({
           date: dateKey,
@@ -119,13 +132,14 @@ export default function useDemandForecast() {
     };
   }, []);
 
-  const todayForecast = forecastDays[0] || null;
-  const tomorrowForecast = forecastDays[1] || null;
+  const latestForecast = forecastDays[forecastDays.length - 1] || null;
+  const todayForecast = latestForecast;
+  const tomorrowForecast = latestForecast;
   const hasHighDemandAlert = Boolean(
-    tomorrowForecast && (
-      tomorrowForecast.total_kg_demanded > tomorrowForecast.total_kg_produced * 1.15 ||
-      tomorrowForecast.is_payday_weekend ||
-      tomorrowForecast.event_tag
+    latestForecast && (
+      latestForecast.total_kg_demanded > latestForecast.total_kg_produced * 1.15 ||
+      latestForecast.is_payday_weekend ||
+      latestForecast.event_tag
     )
   );
 

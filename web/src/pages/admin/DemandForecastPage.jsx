@@ -33,8 +33,8 @@ const formatKg = (value) => `${Math.round(Number(value || 0)).toLocaleString()} 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white/95 p-3.5 shadow-xl backdrop-blur-md text-xs space-y-2">
-        <p className="font-bold text-slate-800 border-b border-slate-100 pb-1">{label}</p>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-xs space-y-2">
+        <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">{label}</p>
         {payload.map((entry, index) => (
           <div key={`item-${index}`} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
@@ -97,9 +97,9 @@ export default function DemandForecastPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[450px] rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+      <div className="flex items-center justify-center min-h-[450px] rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
         <div className="flex flex-col items-center gap-3 text-slate-500 text-sm font-medium">
-          <div className="h-8 w-8 animate-spin rounded-full border-3 border-sky-600 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4091c9] border-t-transparent" />
           <span>Processing historical logs, weather metrics & calendar events...</span>
         </div>
       </div>
@@ -110,16 +110,16 @@ export default function DemandForecastPage() {
     <div className="space-y-6">
       
       {/* SECTION 1: HEADER & HIGH-LEVEL PREDICTIVE BANNER */}
-      <div className="rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-900 via-slate-800 to-sky-950 p-6 sm:p-8 text-white shadow-xl">
+      <div className="rounded-[28px] border border-gray-200 bg-white p-6 sm:p-8 text-slate-900 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-300 backdrop-blur-md">
-              <Zap className="h-3.5 w-3.5 text-sky-400" /> AI Demand Engine
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#c7d9f5] bg-[#eff6ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#0f172a]">
+              <Zap className="h-3.5 w-3.5 text-[#4091c9]" /> AI Demand Engine
             </div>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-slate-900">
               Tomorrow's Operational Forecast
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300 leading-relaxed">
+            <p className="mt-2 max-w-2xl text-sm text-slate-500 leading-relaxed">
               Real-time predictive output blending weather forecasts, local calendar spikes, and historical distribution patterns.
             </p>
           </div>
@@ -127,21 +127,21 @@ export default function DemandForecastPage() {
           {/* Dynamic Operational Risk Alerts */}
           <div className="flex flex-col sm:flex-row gap-3">
             {tomorrowForecast?.is_spike && (
-              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 backdrop-blur-md flex items-center gap-3">
-                <AlertTriangle className="h-6 w-6 text-amber-400 shrink-0" />
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 flex items-center gap-3">
+                <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">Demand Surge Expected</p>
-                  <p className="text-xs text-amber-100">Projected volume spike (+25%).</p>
+                  <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">Demand Surge Expected</p>
+                  <p className="text-xs text-amber-600">Projected volume spike (+25%).</p>
                 </div>
               </div>
             )}
 
             {rainProb > 50 && (
-              <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-4 backdrop-blur-md flex items-center gap-3">
-                <CloudRain className="h-6 w-6 text-blue-400 shrink-0" />
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 flex items-center gap-3">
+                <CloudRain className="h-6 w-6 text-blue-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Rain Impact Expected</p>
-                  <p className="text-xs text-blue-100">{rainProb}% rain chance may lower retail demand.</p>
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Rain Impact Expected</p>
+                  <p className="text-xs text-blue-600">{rainProb}% rain chance may lower retail demand.</p>
                 </div>
               </div>
             )}
@@ -152,46 +152,46 @@ export default function DemandForecastPage() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           
           {/* Total Target Demand */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Projected Target</p>
-            <p className="mt-1 text-3xl font-extrabold text-white">{formatKg(targetDemandKg)}</p>
-            <p className="mt-2 text-xs text-sky-300 flex items-center gap-1">
+            <p className="mt-1 text-3xl font-extrabold text-slate-900">{formatKg(targetDemandKg)}</p>
+            <p className="mt-2 text-xs text-[#4091c9] flex items-center gap-1">
               <TrendingUp className="h-3.5 w-3.5" /> Calculated target volume
             </p>
           </div>
 
           {/* Capacity Variance */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Variance vs Avg Output</p>
-            <p className={`mt-1 text-3xl font-extrabold ${isOverCapacity ? 'text-amber-400' : 'text-emerald-400'}`}>
+            <p className={`mt-1 text-3xl font-extrabold ${isOverCapacity ? 'text-amber-500' : 'text-emerald-500'}`}>
               {isOverCapacity ? `+${formatKg(productionGap)}` : `-${formatKg(Math.abs(productionGap))}`}
             </p>
-            <p className="mt-2 text-xs text-slate-300 flex items-center gap-1">
-              <Factory className="h-3.5 w-3.5" /> {isOverCapacity ? 'Requires extra shift / overtime' : 'Normal shift capacity'}
+            <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+              <Factory className="h-3.5 w-3.5 text-slate-500" /> {isOverCapacity ? 'Requires extra shift / overtime' : 'Normal shift capacity'}
             </p>
           </div>
 
           {/* Temperature Index */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Temperature Index</p>
             <div className="mt-1 flex items-baseline gap-2">
-              <p className="text-3xl font-extrabold text-white">{tempC.toFixed(1)}°C</p>
-              <span className={`text-xs font-bold ${tempC > 32 ? 'text-rose-400' : 'text-slate-300'}`}>
+              <p className="text-3xl font-extrabold text-slate-900">{tempC.toFixed(1)}°C</p>
+              <span className={`text-xs font-bold ${tempC > 32 ? 'text-rose-500' : 'text-slate-500'}`}>
                 {tempC > 32 ? 'High Heat' : 'Moderate'}
               </span>
             </div>
-            <p className="mt-2 text-xs text-slate-300 flex items-center gap-1">
-              <Thermometer className="h-3.5 w-3.5 text-rose-400" /> Meltdown / Consumption factor
+            <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+              <Thermometer className="h-3.5 w-3.5 text-rose-500" /> Meltdown / Consumption factor
             </p>
           </div>
 
           {/* Rain & Calendar Factor */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Calendar & Event Tag</p>
-            <p className="mt-1 text-lg font-bold text-white truncate">
+            <p className="mt-1 text-lg font-bold text-slate-900 truncate">
               {tomorrowForecast?.is_payday_weekend ? 'Payday Active' : 'Regular Cycle'}
             </p>
-            <p className="mt-2 text-xs text-slate-300 truncate">
+            <p className="mt-2 text-xs text-slate-500 truncate">
               {tomorrowForecast?.event_tag || 'Routine Operations'}
             </p>
           </div>
@@ -211,16 +211,16 @@ export default function DemandForecastPage() {
                 <p className="text-xs text-slate-500">Comparing actual historical output against target demand markers.</p>
               </div>
               <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                <CalendarDays className="h-3.5 w-3.5 text-sky-600" /> 7-Day Window
+                <CalendarDays className="h-3.5 w-3.5 text-[#4091c9]" /> 7-Day Window
               </div>
             </div>
 
             <div className="h-72 w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
+                  <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: '16px', fontSize: '12px' }} />
                   
@@ -229,8 +229,8 @@ export default function DemandForecastPage() {
                     name="Historical Production"
                     type="monotone"
                     dataKey="Historical Production"
-                    fill="#e0f2fe"
-                    stroke="#0284c7"
+                    fill="#bfdbfe"
+                    stroke="#4091c9"
                     strokeWidth={2}
                   />
 
@@ -249,7 +249,7 @@ export default function DemandForecastPage() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-3 text-xs text-sky-800 flex items-center justify-between">
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700 flex items-center justify-between">
             <span className="font-semibold">Insight:</span>
             <span>Dashed line signifies AI target orders derived from ambient temp, rain risk, and payday calendars.</span>
           </div>
