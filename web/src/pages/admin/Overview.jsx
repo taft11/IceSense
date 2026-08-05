@@ -1,12 +1,42 @@
 import { Calendar, Activity, Bell, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import useDemandForecast from '../../hooks/useDemandForecast';
+
+const formatKg = (value) => `${Math.round(Number(value || 0)).toLocaleString()} kg`;
+
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-xs space-y-2">
+      <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">{label}</p>
+      {payload.map((entry, index) => (
+        <div key={index} className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-slate-600 font-medium">{entry.name}:</span>
+          </div>
+          <span className="font-bold text-slate-900">{formatKg(entry.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export default function Overview({ iotData, todayDate }) {
   const navigate = useNavigate();
+  const { forecastDays = [], loading } = useDemandForecast();
   const tomorrowDemandKg = 780;
   const dailyTargetKg = 100;
   const stockProducedKg = Number(iotData?.stockProducedKg || 0);
   const productionTargetPercent = stockProducedKg > 0 ? Math.round((stockProducedKg / dailyTargetKg) * 100) : 0;
+
+  const chartData = forecastDays.map((day) => ({
+    day: day.label,
+    'Historical Production': Math.round(day.total_kg_produced || 0),
+    'Predicted Demand': Math.round(day.total_kg_demanded || 0),
+  }));
 
   return (
     <div className="animate-fade-in overview-page">
@@ -95,23 +125,42 @@ export default function Overview({ iotData, todayDate }) {
               <option>Last Week</option>
             </select>
           </div>
-          <div className="flex h-56 items-end justify-between gap-2 sm:gap-6">
-            {[45, 65, 35, 80, 55, 90, 100].map((height, i) => (
-              <div key={i} className="group relative flex w-full flex-col justify-end h-full">
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-xs font-bold py-1 px-2 rounded">
-                  {height}k
-                </div>
-                <div className="w-full rounded-t-lg bg-[#4091c9]/10 relative h-full">
-                  <div
-                    style={{ height: `${height}%` }}
-                    className="absolute bottom-0 w-full rounded-t-lg bg-[#4091c9] transition-all duration-700 group-hover:bg-[#2d75aa]"
-                  ></div>
+          <div className="h-56 w-full rounded-[28px] border border-slate-200 bg-slate-50 p-4 shadow-sm">
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="flex flex-col items-center gap-3 text-slate-500 text-sm font-medium">
+                  <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4091c9] border-t-transparent" />
+                  <span>Loading demand forecast data...</span>
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-between text-xs font-bold text-gray-400">
-            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: '16px', fontSize: '12px' }} />
+                  <Area
+                    type="monotone"
+                    dataKey="Historical Production"
+                    fill="#c7d9f5"
+                    stroke="#4091c9"
+                    strokeWidth={2}
+                    fillOpacity={0.22}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Predicted Demand"
+                    stroke="#0f172a"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#0f172a' }}
+                    activeDot={{ r: 5 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

@@ -52,7 +52,7 @@ const normalizeForecastData = (data = {}) => ({
 });
 
 const findForecastWindowLastYear = async (baseDate, dayCount = 7) => {
-  const startDate = addDays(baseDate, -365);
+  const startDate = addDays(baseDate, -364);
   const requestedDates = Array.from({ length: dayCount }, (_, index) => addDays(startDate, index));
 
   return Promise.all(
@@ -110,7 +110,7 @@ export default function useDemandForecast() {
           setError('Unable to load demand forecast right now.');
         }
 
-        const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), -365 + index));
+        const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), -364 + index));
         const dateKeys = requestedDates.map((date) => formatDateKey(date));
 
         setForecastDays(dateKeys.map((dateKey, index) => ({
@@ -132,21 +132,22 @@ export default function useDemandForecast() {
     };
   }, []);
 
-  const latestForecast = forecastDays[forecastDays.length - 1] || null;
-  const todayForecast = latestForecast;
-  const tomorrowForecast = latestForecast;
+  const currentForecast = forecastDays[0] || null;
+  const nextForecast = forecastDays[1] || currentForecast;
+  const latestForecast = forecastDays[forecastDays.length - 1] || currentForecast;
   const hasHighDemandAlert = Boolean(
-    latestForecast && (
-      latestForecast.total_kg_demanded > latestForecast.total_kg_produced * 1.15 ||
-      latestForecast.is_payday_weekend ||
-      latestForecast.event_tag
+    currentForecast && (
+      currentForecast.total_kg_demanded > currentForecast.total_kg_produced * 1.15 ||
+      currentForecast.is_payday_weekend ||
+      currentForecast.event_tag
     )
   );
 
   return {
     forecastDays,
-    todayForecast,
-    tomorrowForecast,
+    todayForecast: currentForecast,
+    tomorrowForecast: nextForecast,
+    latestForecast,
     loading,
     error,
     hasHighDemandAlert,

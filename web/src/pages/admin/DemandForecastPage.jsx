@@ -51,7 +51,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function DemandForecastPage() {
-  const { forecastDays = [], loading, error, tomorrowForecast } = useDemandForecast();
+  const { forecastDays = [], loading, error, todayForecast, tomorrowForecast } = useDemandForecast();
 
   // Prepare chart data
   const chartData = forecastDays.map((day) => ({
@@ -61,8 +61,8 @@ export default function DemandForecastPage() {
   }));
 
   // Forecast Metrics
-  const breakdown = tomorrowForecast?.breakdown || {};
-  const targetDemandKg = tomorrowForecast?.total_kg_demanded || 0;
+  const breakdown = todayForecast?.breakdown || {};
+  const targetDemandKg = todayForecast?.total_kg_demanded || 0;
   
   const avgHistoricalOutput = forecastDays.length 
     ? forecastDays.reduce((acc, curr) => acc + (curr.total_kg_produced || 0), 0) / forecastDays.length 
@@ -117,7 +117,7 @@ export default function DemandForecastPage() {
               <Zap className="h-3.5 w-3.5 text-[#4091c9]" /> AI Demand Engine
             </div>
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-slate-900">
-              Tomorrow's Operational Forecast
+              Today's Operational Forecast
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-500 leading-relaxed">
               Real-time predictive output blending weather forecasts, local calendar spikes, and historical distribution patterns.
