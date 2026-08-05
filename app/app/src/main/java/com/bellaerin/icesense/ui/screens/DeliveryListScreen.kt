@@ -368,7 +368,7 @@ fun DeliveryCardItem(
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showImagePreview by remember { mutableStateOf(false) }
 
-    if (showImagePreview && delivery.proofImageUri != null) {
+    if (showImagePreview && delivery.proofImageUrl != null) {
         Dialog(onDismissRequest = { showImagePreview = false }) {
             Box(
                 modifier = Modifier
@@ -378,7 +378,7 @@ fun DeliveryCardItem(
                     .background(Color.Black)
             ) {
                 AsyncImage(
-                    model = delivery.proofImageUri,
+                    model = delivery.proofImageUrl,
                     contentDescription = "Proof Preview",
                     modifier = Modifier.fillMaxSize()
                 )
@@ -490,7 +490,7 @@ fun DeliveryCardItem(
                         }
                     }
 
-                    delivery.proofImageUri?.let { uri ->
+                    delivery.proofImageUrl?.let { uri ->
                         AsyncImage(
                             model = uri,
                             contentDescription = "Proof of Delivery",

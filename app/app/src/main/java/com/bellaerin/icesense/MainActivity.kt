@@ -145,7 +145,7 @@ fun DeliveryApp(
 
                         filteredDocs.forEach { doc ->
                             val userId = doc.getString("userId")
-                            val proofImageUri = doc.getString("proofImageUri")
+                            val proofImageUrl = doc.getString("proofImageUri")
                             val status = doc.getString("status") ?: ""
                             val deliveryTimeSlot = doc.getString("deliveryTimeSlot")
 
@@ -202,7 +202,7 @@ fun DeliveryApp(
                                             longitude = lng,
                                             status = status,
                                             isConfirmed = status == "Delivered",
-                                            proofImageUri = proofImageUri,
+                                            proofImageUrl = proofImageUrl,
                                             deliverySlot = deliveryTimeSlot
                                         )
 
