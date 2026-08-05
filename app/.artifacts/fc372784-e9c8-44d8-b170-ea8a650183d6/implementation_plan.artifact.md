@@ -28,5 +28,5 @@ This plan outlines the changes needed to fetch delivery data by linking the `ord
 - **Filtering**: Check if "To Deliver" and "Delivered" tabs correctly filter orders based on the `isConfirmed` status.
 - **Confirmation**: Mark an order as "Delivered" and verify:
     - The UI updates locally.
-    - The `orders` document in Firestore is updated with `isConfirmed: true` and the `proofImageUri`.
+    - The `orders` document in Firestore is updated with `isConfirmed: true` and the `proofImageUrl`.
 - **Navigation**: Click "View Map" on an order and ensure it opens Google Maps at the correct coordinates.

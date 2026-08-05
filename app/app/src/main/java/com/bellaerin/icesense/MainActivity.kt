@@ -38,6 +38,7 @@ import com.bellaerin.icesense.ui.screens.LoginScreen
 import com.bellaerin.icesense.ui.theme.IceSenseTheme
 import com.bellaerin.icesense.utils.uploadProofImage
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 
@@ -145,7 +146,7 @@ fun DeliveryApp(
 
                         filteredDocs.forEach { doc ->
                             val userId = doc.getString("userId")
-                            val proofImageUrl = doc.getString("proofImageUri")
+                            val proofImageUrl = doc.getString("proofImageUrl")
                             val status = doc.getString("status") ?: ""
                             val deliveryTimeSlot = doc.getString("deliveryTimeSlot")
 
@@ -369,8 +370,9 @@ fun DeliveryApp(
                                         firestore.collection("orders").document(id)
                                             .update(
                                                 "isConfirmed", true,
-                                                "proofImageUri", downloadUrl,
-                                                "status", "Delivered"
+                                                "proofImageUrl", downloadUrl,
+                                                "status", "Delivered",
+                                                "proofImageUri", FieldValue.delete()
                                             ).addOnCompleteListener {
                                                 isUploading = false
                                                 if (it.isSuccessful) {
