@@ -97,8 +97,16 @@ export default function Deliveries() {
     }
   };
 
-  const assignedOrders = orders.filter((order) => order.assignedDriverId).length;
+  const isReadyForDelivery = (order) => {
+    if (order?.readyForDelivery === true) return true;
+
+    const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
+    return paymentStatus === 'paid' || paymentStatus === 'approved' || paymentStatus === 'payment_verified';
+  };
+
+  const assignedOrders = orders.filter((order) => isReadyForDelivery(order) && order.assignedDriverId).length;
   const visibleOrders = orders.filter((order) => {
+    if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
     if (activeFilter === 'unassigned') return !order.assignedDriverId;
     return true;
@@ -142,7 +150,7 @@ export default function Deliveries() {
           <p className="mt-2 text-gray-600">Assign orders to specific Drivers</p>
         </div>
         <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <p className="font-semibold">{assignedOrders} assigned / {orders.length} orders</p>
+          <p className="font-semibold">{assignedOrders} assigned / {visibleOrders.length} approved orders</p>
         </div>
       </div>
 
@@ -170,7 +178,7 @@ export default function Deliveries() {
         </div>
       ) : visibleOrders.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-600">
-          No orders in this view yet.
+          No approved orders are available for delivery assignment yet.
         </div>
       ) : (
         <>

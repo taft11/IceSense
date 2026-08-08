@@ -199,6 +199,20 @@ export default function Orders({
     return 'Unavailable';
   };
 
+  const getProofDriverName = (order, podDoc = null) => {
+    const candidateValues = [
+      podDoc?.driverName,
+      podDoc?.assignedDriverName,
+      order?.assignedDriverName,
+      order?.assignedDriver?.fullName,
+      order?.assignedDriver?.name,
+      order?.driverName,
+      order?.deliveredBy,
+    ];
+
+    return candidateValues.find((value) => Boolean(value)) || 'Unknown driver';
+  };
+
   useEffect(() => {
     if (!expandedOrderId) return;
 
@@ -218,7 +232,7 @@ export default function Orders({
           [order.id]: {
             imageUrl: directProofUrl,
             deliveredAt: order?.deliveredAt || order?.deliveryTimestamp || null,
-            driverName: order?.driverName || order?.deliveredBy || 'Unknown driver',
+            driverName: getProofDriverName(order),
           },
         }));
         return;
@@ -232,9 +246,16 @@ export default function Orders({
         if (!active) return;
 
         const podDoc = snapshot.docs[0]?.data() ?? null;
+        const resolvedPodDoc = podDoc
+          ? {
+              ...podDoc,
+              driverName: getProofDriverName(order, podDoc),
+            }
+          : podDoc;
+
         setPodDataByOrderId((current) => ({
           ...current,
-          [order.id]: podDoc,
+          [order.id]: resolvedPodDoc,
         }));
       } catch (error) {
         console.error('Failed to fetch POD data:', error);

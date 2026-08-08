@@ -23,6 +23,7 @@ export default function AdminDashboard() {
     : location.pathname.includes('/forecast')
     ? 'forecast'
     : 'overview';
+  const isOrdersSectionActive = activeView === 'orders' || activeView === 'deliveries';
   const [iotData, setIotData] = useState({
     temperature: 'Loading...',
     humidity: 'Loading...',
@@ -284,6 +285,7 @@ export default function AdminDashboard() {
       await updateDoc(doc(db, 'orders', order.id), {
         paymentStatus: 'PAID',
         status: 'Processing',
+        readyForDelivery: true,
         verifiedAt: serverTimestamp(),
         verifiedBy: adminUid || null,
         adminNotes: '',
@@ -303,6 +305,7 @@ export default function AdminDashboard() {
       await updateDoc(doc(db, 'orders', selectedRejectOrder.id), {
         paymentStatus: 'REJECTED',
         status: 'Cancelled',
+        readyForDelivery: false,
         verifiedAt: serverTimestamp(),
         verifiedBy: adminUid || null,
         adminNotes: rejectReason || 'No reason provided.',
@@ -334,10 +337,10 @@ export default function AdminDashboard() {
               </Link>
             </li>
             <li>
-              <Link to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Orders</span>
-                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                  {pendingOrders || 3}
+              <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Predictive Analysis</span>
+                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
+                  1
                 </span>
               </Link>
             </li>
@@ -347,20 +350,20 @@ export default function AdminDashboard() {
               </Link>
             </li>
             <li>
-              <Link to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Deliveries</span>
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                  {unassignedDeliveries}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Predictive Analysis</span>
-                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
-                  1
-                </span>
-              </Link>
+              <div className={`rounded-r-xl border-l-4 px-2 py-2 text-sm transition-all ${isOrdersSectionActive ? 'border-sky-600 bg-sky-50/60' : 'border-transparent hover:bg-slate-50'}`}>
+                <Link to="/admin/orders" className={`flex w-full items-center justify-between rounded-lg px-2 py-2 ${isOrdersSectionActive ? 'font-semibold text-sky-700' : 'text-slate-700 hover:text-slate-900'}`}>
+                  <span>Orders</span>
+                  <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {pendingOrders || 3}
+                  </span>
+                </Link>
+                <Link to="/admin/deliveries" className={`mt-1 flex w-full items-center justify-between rounded-lg px-2 py-2 text-sm ${activeView === 'deliveries' ? 'font-semibold text-sky-700' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <span className="pl-2">Deliveries</span>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    {unassignedDeliveries}
+                  </span>
+                </Link>
+              </div>
             </li>
           </ul>
         </nav>

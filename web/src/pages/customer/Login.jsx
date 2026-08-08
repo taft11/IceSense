@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'fire
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { sanitizePhoneNumberInput, getMissingProfileFields } from './utils/profileValidation';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -30,8 +31,16 @@ export default function Login() {
         await signInWithEmailAndPassword(auth, email, password);
         navigate('/portal');
       } else {
-        if (!firstName.trim() || !lastName.trim() || !contactNumber.trim()) {
-          throw new Error('Please fill in your first name, last name, and phone number.');
+        const sanitizedPhoneNumber = sanitizePhoneNumberInput(contactNumber);
+        const { missing, invalid } = getMissingProfileFields({
+          firstName,
+          lastName,
+          contactNumber: sanitizedPhoneNumber,
+        });
+        const profileIssues = [...missing, ...invalid];
+
+        if (profileIssues.length > 0) {
+          throw new Error(`Please fill in your details correctly. ${profileIssues.join(', ')}.`);
         }
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match!');
@@ -46,7 +55,7 @@ export default function Login() {
           middleName: middleName.trim(),
           lastName: lastName.trim(),
           email: userCredential.user.email || email,
-          contactNumber: contactNumber.trim(),
+          contactNumber: sanitizedPhoneNumber,
           createdAt: serverTimestamp(),
         }, { merge: true });
         navigate('/portal');
@@ -168,7 +177,7 @@ export default function Login() {
                     inputMode="numeric"
                     required={!isLogin}
                     value={contactNumber}
-                    onChange={(e) => setContactNumber(e.target.value)}
+                    onChange={(e) => setContactNumber(sanitizePhoneNumberInput(e.target.value))}
                     placeholder=" "
                     className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
                   />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { auth, db, storage } from '../../services/firebase';
 import { PRODUCTS } from './data/products';
@@ -12,6 +12,7 @@ import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
 import PendingOrderConfirmationModal from './components/PendingOrderConfirmationModal';
 import LocationPicker from './components/LocationPicker';
+import { getMissingProfileFields } from './utils/profileValidation';
 
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
 
@@ -511,12 +512,29 @@ export default function CustomerPortal() {
     navigate('/portal/account');
   };
 
-const handleOrder = async () => {
+  const redirectToProfileSetup = (message) => {
+    setAccountSection('profile');
+    setAccountMessage(message);
+    setAccountError('');
+    setIsCheckoutConfirmOpen(false);
+    setIsCartOpen(false);
+    navigate('/portal/account');
+  };
+
+  const handleOrder = async () => {
     if (cartItems.length === 0) return;
 
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setOrdersError('Please sign in to place an order.');
+      return;
+    }
+
+    const { missing, invalid } = getMissingProfileFields(accountInfo);
+    const profileIssues = [...missing, ...invalid];
+    if (profileIssues.length > 0) {
+      const issueList = profileIssues.join(', ');
+      redirectToProfileSetup(`Please complete your personal details before checkout. ${issueList}.`);
       return;
     }
 
@@ -562,6 +580,7 @@ const handleOrder = async () => {
         status: 'Pending Payment Verification',
         paymentMethod,
         paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+        readyForDelivery: false,
         receiptUrl,
         adminNotes: '',
         verifiedAt: null,
@@ -586,6 +605,7 @@ const handleOrder = async () => {
       };
 
       const orderDocRef = await addDoc(ordersRef, orderPayload);
+      await updateDoc(orderDocRef, { orderId: orderDocRef.id });
 
       setStocks((prev) => {
         const nextStocks = { ...prev };
@@ -614,6 +634,15 @@ const handleOrder = async () => {
 
   const openCheckoutConfirmation = () => {
     if (cartItems.length === 0) return;
+
+    const { missing, invalid } = getMissingProfileFields(accountInfo);
+    const profileIssues = [...missing, ...invalid];
+    if (profileIssues.length > 0) {
+      const issueList = profileIssues.join(', ');
+      redirectToProfileSetup(`Please complete your personal details before checkout. ${issueList}.`);
+      return;
+    }
+
     if (!hasSavedAddress) {
       redirectToAddressSetup();
       return;
@@ -760,6 +789,16 @@ const handleOrder = async () => {
 
   const handleAccountSave = async (event) => {
     event.preventDefault();
+
+    const { missing, invalid } = getMissingProfileFields(accountInfo);
+    const profileIssues = [...missing, ...invalid];
+
+    if (profileIssues.length > 0) {
+      setAccountError(`Please correct your profile details before saving. ${profileIssues.join(', ')}.`);
+      setAccountMessage('');
+      return;
+    }
+
     setAccountSaving(true);
     setAccountMessage('');
     setAccountError('');
