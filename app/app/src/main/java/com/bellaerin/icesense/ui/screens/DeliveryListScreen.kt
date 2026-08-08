@@ -2,6 +2,7 @@ package com.bellaerin.icesense.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
@@ -19,10 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -32,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -41,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.bellaerin.icesense.model.Delivery
 import com.bellaerin.icesense.ui.components.BellaErinLogo
@@ -63,7 +68,7 @@ fun DeliveryListScreen(
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("To Deliver", "Delivered")
+    val tabs = listOf("Pending", "Delivered")
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -115,37 +120,47 @@ fun DeliveryListScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
         // Logo and Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)
         ) {
-            IconButton(onClick = onOpenMenu) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Menu",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            Surface(
+                onClick = onOpenMenu,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menu",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            BellaErinLogo(iconSize = 48.dp, showText = false)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "BELLA ERIN",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF333333)
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    letterSpacing = 0.5.sp
                 )
                 Text(
-                    text = "TUBE ICE • Delivery",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Tube Ice Delivery Service",
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    fontWeight = FontWeight.Bold
                 )
             }
+            
+            BellaErinLogo(iconSize = 40.dp, showText = false)
         }
 
         val pendingCount = deliveries.count { !it.isConfirmed }
@@ -159,6 +174,7 @@ fun DeliveryListScreen(
                 if (selectedTabIndex < tabPositions.size) {
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                        height = 3.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -335,25 +351,29 @@ private fun createImageUri(context: Context): Uri {
 
 @Composable
 fun SlotHeader(slot: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.Schedule,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = slot,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = slot,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -365,6 +385,7 @@ fun DeliveryCardItem(
     onConfirmRequest: () -> Unit,
     onPermissionRequest: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showImagePreview by remember { mutableStateOf(false) }
 
@@ -374,24 +395,39 @@ fun DeliveryCardItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .background(Color.Black)
+                    .clickable { showImagePreview = false } // Tap anywhere to close
             ) {
                 AsyncImage(
                     model = delivery.proofImageUrl,
                     contentDescription = "Proof Preview",
                     modifier = Modifier.fillMaxSize()
                 )
-                IconButton(
-                    onClick = { showImagePreview = false },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                
+                Surface(
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = CircleShape,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White
-                    )
+                    IconButton(
+                        onClick = { showImagePreview = false },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
                 }
+                
+                Text(
+                    text = "Tap anywhere to close",
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                )
             }
         }
     }
@@ -402,11 +438,14 @@ fun DeliveryCardItem(
             title = { Text("Confirm Arrival") },
             text = { Text("Are you sure you have arrived at ${delivery.customerName}'s location?") },
             confirmButton = {
-                Button(onClick = {
-                    showConfirmDialog = false
-                    onConfirmRequest()
-                }) {
-                    Text("Confirm")
+                Button(
+                    onClick = {
+                        showConfirmDialog = false
+                        onConfirmRequest()
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Yes, Arrived")
                 }
             },
             dismissButton = {
@@ -417,117 +456,264 @@ fun DeliveryCardItem(
         )
     }
 
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = delivery.customerName,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Status Indicator Bar
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterStart)
+                    .background(
+                        if (delivery.isConfirmed) Color(0xFF4CAF50) else Color(0xFFFF9800)
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = delivery.address,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    if (delivery.deliverySlot != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = delivery.deliverySlot,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-                if (delivery.isConfirmed) {
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text("Delivered") },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            labelColor = Color(0xFF4CAF50)
-                        ),
-                        enabled = false,
-                        modifier = Modifier.align(Alignment.CenterVertically)
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            if (delivery.isConfirmed) {
+            )
+
+            Column(modifier = Modifier.padding(start = 22.dp, end = 20.dp, top = 20.dp, bottom = 20.dp)) {
+                // Header: Order ID and Contact Actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        OutlinedButton(
-                            onClick = onOpenMap,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("View Maps")
+                            Text(
+                                text = "#${delivery.id.take(8).uppercase()}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                        
+                        if (delivery.deliverySlot != null) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = delivery.deliverySlot,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
-                    delivery.proofImageUrl?.let { uri ->
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = "Proof of Delivery",
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { showImagePreview = true }
+                    val activeNumber = delivery.phoneNumber ?: delivery.contactNumber
+                    if (!activeNumber.isNullOrBlank()) {
+                        Row {
+                            FilledIconButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_DIAL, "tel:$activeNumber".toUri())
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.Phone,
+                                    contentDescription = "Call",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            FilledIconButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_SENDTO, "smsto:$activeNumber".toUri())
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.size(36.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Message,
+                                    contentDescription = "Message",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Customer Info
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = delivery.customerName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp).padding(top = 2.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = delivery.address,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 20.sp
+                            )
+                        }
+
+                        if (!delivery.phoneNumber.isNullOrBlank() || !delivery.contactNumber.isNullOrBlank()) {
+                            val displayNum = delivery.phoneNumber ?: delivery.contactNumber
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Phone,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = displayNum!!,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Status Badge
+                    Surface(
+                        color = if (delivery.isConfirmed) 
+                            Color(0xFFE8F5E9) 
+                        else 
+                            Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (delivery.isConfirmed) "Delivered" else "Pending",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (delivery.isConfirmed) Color(0xFF2E7D32) else Color(0xFFE65100)
                         )
                     }
                 }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            if (hasLocationPermission) {
-                                onOpenMap()
-                            } else {
-                                onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Footer Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (delivery.isConfirmed) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(
+                                onClick = onOpenMap,
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Route")
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("View Map")
-                    }
-                    
-                    SwipeToConfirmButton(
-                        modifier = Modifier.weight(2f),
-                        onConfirmed = {
-                            if (hasLocationPermission) {
-                                showConfirmDialog = true
-                            } else {
-                                onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                            
+                            delivery.proofImageUrl?.let { uri ->
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { showImagePreview = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = "Proof",
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    // Small "View" overlay
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check, // Reusing check icon for confirmation look
+                                            contentDescription = null,
+                                            tint = Color.White.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
-                    )
+                    } else {
+                        // Action buttons for Pending
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (hasLocationPermission) onOpenMap() 
+                                    else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(vertical = 12.dp)
+                            ) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Route")
+                            }
+                            
+                            SwipeToConfirmButton(
+                                modifier = Modifier.weight(2f),
+                                onConfirmed = {
+                                    if (hasLocationPermission) showConfirmDialog = true
+                                    else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -545,13 +731,13 @@ fun SwipeToConfirmButton(
     
     Box(
         modifier = modifier
-            .height(48.dp)
+            .height(44.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
             .onSizeChanged { widthPx = it.width.toFloat() }
     ) {
-        val thumbSize = 40.dp
+        val thumbSize = 36.dp
         val thumbSizePx = with(density) { thumbSize.toPx() }
         val paddingPx = with(density) { 4.dp.toPx() }
         val maxOffset = (widthPx - thumbSizePx - (paddingPx * 2)).coerceAtLeast(0f)
@@ -562,8 +748,9 @@ fun SwipeToConfirmButton(
         Text(
             text = "Slide to Confirm",
             modifier = Modifier.align(Alignment.Center),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = (1f - progress).coerceIn(0f, 1f))
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = (0.7f - (progress * 0.5f)).coerceIn(0f, 1f)),
+            fontWeight = FontWeight.Bold
         )
 
         Box(
@@ -572,14 +759,21 @@ fun SwipeToConfirmButton(
                 .padding(4.dp)
                 .size(thumbSize)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
                 .draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         offsetX = (offsetX + delta).coerceIn(0f, maxOffset)
                     },
                     onDragStopped = {
-                        if (offsetX > maxOffset * 0.8f) {
+                        if (offsetX > maxOffset * 0.85f) {
                             offsetX = maxOffset
                             onConfirmed()
                         }
@@ -589,9 +783,10 @@ fun SwipeToConfirmButton(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (progress > 0.8f) Icons.Default.Check else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = if (progress > 0.85f) Icons.Default.Check else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(20.dp)
             )
         }
     }

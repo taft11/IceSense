@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.bellaerin.icesense.model.Delivery
 import com.bellaerin.icesense.model.User
@@ -161,7 +160,9 @@ fun DeliveryApp(
                                         val firstName = userDoc.getString("firstName") ?: ""
                                         val lastName = userDoc.getString("lastName") ?: ""
                                         val customerName = "$firstName $lastName".trim().ifEmpty { "Customer" }
-                                        
+                                        val phoneNumber = userDoc.getString("phoneNumber")
+                                        val contactNumber = userDoc.getString("contactNumber") ?: doc.getString("contactNumber")
+
                                         val defaultAddressId = userDoc.getString("defaultAddressId")
                                         val addresses = userDoc.get("addresses") as? List<Map<String, Any>>
                                         
@@ -204,7 +205,9 @@ fun DeliveryApp(
                                             status = status,
                                             isConfirmed = status == "Delivered",
                                             proofImageUrl = proofImageUrl,
-                                            deliverySlot = deliveryTimeSlot
+                                            deliverySlot = deliveryTimeSlot,
+                                            phoneNumber = phoneNumber,
+                                            contactNumber = contactNumber
                                         )
 
                                         fetchedCount++
