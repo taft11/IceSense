@@ -105,11 +105,25 @@ export default function Deliveries() {
   };
 
   const assignedOrders = orders.filter((order) => isReadyForDelivery(order) && order.assignedDriverId).length;
-  const visibleOrders = orders.filter((order) => {
+  const filteredOrders = orders.filter((order) => {
     if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
     if (activeFilter === 'unassigned') return !order.assignedDriverId;
     return true;
+  });
+
+  const visibleOrders = [...filteredOrders].sort((a, b) => {
+    const aCreated = a.createdAt?.toMillis?.() || a.createdAt || 0;
+    const bCreated = b.createdAt?.toMillis?.() || b.createdAt || 0;
+
+    if (activeFilter === 'all') {
+      const aUnassigned = !a.assignedDriverId;
+      const bUnassigned = !b.assignedDriverId;
+      if (aUnassigned && !bUnassigned) return -1;
+      if (!aUnassigned && bUnassigned) return 1;
+    }
+
+    return bCreated - aCreated;
   });
 
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDERS_PER_PAGE));
