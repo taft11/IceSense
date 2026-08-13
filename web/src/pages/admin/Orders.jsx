@@ -281,12 +281,7 @@ export default function Orders({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-bold text-gray-800">Orders</h2>
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              {completedOrders} Completed
-            </span>
-            <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              {pendingOrders} Action Required
-            </span>
+            
           </div>
           <p className="mt-2 text-gray-600">Review orders by status and manage payment verification when needed.</p>
         </div>

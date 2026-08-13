@@ -18,6 +18,8 @@ export default function Deliveries() {
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeDateFilter, setActiveDateFilter] = useState('');
   const [confirmAssignment, setConfirmAssignment] = useState(null);
   const ORDERS_PER_PAGE = 6;
 
@@ -105,6 +107,7 @@ export default function Deliveries() {
   };
 
   const assignedOrders = orders.filter((order) => isReadyForDelivery(order) && order.assignedDriverId).length;
+  const approvedOrders = orders.filter((order) => isReadyForDelivery(order)).length;
   const filteredOrders = orders.filter((order) => {
     if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
@@ -112,7 +115,35 @@ export default function Deliveries() {
     return true;
   });
 
-  const visibleOrders = [...filteredOrders].sort((a, b) => {
+  // helper: extract YYYY-MM-DD from order.createdAt
+  const getOrderDateValue = (order) => {
+    if (!order?.createdAt) return null;
+    const createdAt = typeof order.createdAt?.toDate === 'function'
+      ? order.createdAt.toDate()
+      : order.createdAt instanceof Date
+        ? order.createdAt
+        : new Date(order.createdAt);
+    if (Number.isNaN(createdAt.getTime())) return null;
+    return createdAt.toISOString().split('T')[0];
+  };
+
+  // Apply date filter and search term
+  const searchedAndDated = filteredOrders.filter((order) => {
+    // date filter
+    if (activeDateFilter) {
+      const d = getOrderDateValue(order);
+      if (d !== activeDateFilter) return false;
+    }
+
+    // search
+    const q = String(searchTerm || '').trim().toLowerCase();
+    if (!q) return true;
+    return [order.id, order.customerName, order.customerEmail]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q));
+  });
+
+  const visibleOrders = [...searchedAndDated].sort((a, b) => {
     const aCreated = a.createdAt?.toMillis?.() || a.createdAt || 0;
     const bCreated = b.createdAt?.toMillis?.() || b.createdAt || 0;
 
@@ -133,6 +164,10 @@ export default function Deliveries() {
   useEffect(() => {
     setCurrentPage(1);
   }, [activeFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeDateFilter, searchTerm]);
 
   const resolveOrderAddress = (order) => {
     if (order.shippingAddress) return order.shippingAddress;
@@ -163,21 +198,47 @@ export default function Deliveries() {
           <h2 className="text-2xl font-bold text-gray-800">Delivery assignments</h2>
           <p className="mt-2 text-gray-600">Assign orders to specific Drivers</p>
         </div>
-        <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <p className="font-semibold">{assignedOrders} assigned / {visibleOrders.length} approved orders</p>
-        </div>
+        
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
-        {Object.entries(FILTERS).map(([key, label]) => (
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <div className="inline-flex flex-wrap items-center gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+          {Object.entries(FILTERS).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveFilter(key)}
+              className={`rounded-full px-3 py-2 text-sm font-semibold transition ${activeFilter === key ? 'bg-[#4091c9] text-white shadow-sm' : 'bg-transparent text-slate-600 hover:bg-slate-100'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search order / customer"
+              className="w-44 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            />
+          </div>
+
+          <input
+            type="date"
+            value={activeDateFilter}
+            onChange={(e) => setActiveDateFilter(e.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4091c9]"
+          />
+
           <button
-            key={key}
-            onClick={() => setActiveFilter(key)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeFilter === key ? 'bg-[#4091c9] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            onClick={() => { setActiveDateFilter(''); setSearchTerm(''); }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
-            {label}
+            Reset
           </button>
-        ))}
+        </div>
       </div>
 
       {error && (
@@ -216,7 +277,7 @@ export default function Deliveries() {
                       <tr key={order.id} className="align-top">
                         <td className="px-4 py-3">
                           <p className="font-semibold text-gray-800">#{order.id?.slice(0, 8).toUpperCase()}</p>
-                          <p className="mt-1 text-xs text-gray-500">{order.createdAt ? 'Placed recently' : 'No date'}</p>
+                          <p className="mt-1 text-xs text-gray-500">{order.createdAt ? (typeof order.createdAt?.toDate === 'function' ? order.createdAt.toDate().toLocaleString() : order.createdAt instanceof Date ? order.createdAt.toLocaleString() : new Date(order.createdAt).toLocaleString()) : 'No date'}</p>
                         </td>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-gray-800">{order.customerName || 'Unknown customer'}</p>

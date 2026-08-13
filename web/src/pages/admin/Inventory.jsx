@@ -166,6 +166,36 @@ export default function Inventory() {
     };
   }, []);
 
+  // Helper: safely format Firestore Timestamp, Date objects, and numeric timestamps
+  const formatTimestamp = (value) => {
+    if (!value) return 'Live (Syncing...)';
+    try {
+      let date = null;
+      if (typeof value?.toDate === 'function') {
+        date = value.toDate();
+      } else if (value instanceof Date) {
+        date = value;
+      } else if (typeof value === 'number') {
+        // assume milliseconds if large, otherwise seconds
+        date = value > 1e12 ? new Date(value) : new Date(value * 1000);
+      } else {
+        date = new Date(value);
+      }
+
+      if (Number.isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleString();
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
+  const truncateId = (id) => {
+    if (!id) return '';
+    const s = String(id);
+    if (s.length <= 10) return s;
+    return `${s.slice(0, 6)}...${s.slice(-3)}`;
+  };
+
   const inventoryRows = useMemo(() => {
     const inventoryMap = Object.fromEntries(firestoreInventory.map((item) => [item.productId, item]));
     const scaleBreakdown = scaleInventory?.sacks_breakdown || {};
@@ -333,23 +363,7 @@ export default function Inventory() {
           <p className="mt-2 text-gray-600">Monitor stock levels for all ice products.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleOpenAdjust('tube-50')}
-            className="rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2d75aa]"
-          >
-            Adjust Stock
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCalibrateScale}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-200 hover:text-[#4091c9]"
-          >
-            Calibrate Scale
-          </button>
-        </div>
+        {/* Header controls removed: Adjust Stock & Calibrate Scale */}
       </div>
 
       <section className="mb-7">
@@ -363,17 +377,26 @@ export default function Inventory() {
 
         {/* UI optimization: summary metrics now live in a compact horizontal banner above the product grid. */}
         <div className="mb-5 grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-3">
-          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Total Weight</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{totalActiveWeight} kg</p>
+          <div className="rounded-xl bg-white p-3.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Total Weight</span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{totalActiveWeight} kg</p>
+              </div>
+            </div>
           </div>
-          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Total Units</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{totalSacks}</p>
-          </div>
-          <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Scale Feed</p>
-            <p className="mt-1 text-lg font-bold text-green-700">Online</p>
+
+          <div className="rounded-xl bg-white p-3.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Total Units</span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{totalSacks}</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -385,30 +408,39 @@ export default function Inventory() {
               onClick={() => handleOpenAdjust(item.id)}
               className="rounded-2xl border border-gray-100 bg-white p-5 text-left shadow-sm transition hover:border-[#4091c9] hover:shadow-md"
             >
-              <div className="mb-4">
-                <div>
-                  <p className="text-base font-bold text-gray-800">{item.name}</p>
-                  {/* UI optimization: the card subtitle now uses a compact size label for clearer scanning. */}
-                  <p className="mt-1 text-xs font-semibold text-gray-500">{item.type === 'tube' ? `${item.weightPerUnitKg}kg Tube` : `${item.weightPerUnitKg}kg ${item.packaging}`}</p>
-                  <div className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${item.isMonitoredByScale && item.currentStock === 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
-                    {item.isMonitoredByScale && item.currentStock === 0 ? '🟡 Scale Idle' : '🟢 Scale Live (ESP32)'}
+                  <div className="mb-4 relative">
+                    <div>
+                      <p className="text-base font-bold text-gray-800">{item.name}</p>
+                      {/* UI optimization: the card subtitle now uses a compact size label for clearer scanning. */}
+                      <p className="mt-1 text-xs font-semibold text-gray-500">{item.type === 'tube' ? `${item.weightPerUnitKg}kg Tube` : `${item.weightPerUnitKg}kg ${item.packaging}`}</p>
+                    </div>
+
+                    {/* Status pill: In Stock / Out of Stock */}
+                    <div className="absolute right-3 top-3">
+                      {item.currentStock > 0 ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">In Stock</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Out of Stock</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl bg-blue-50 p-3">
                   <p className="text-xs uppercase tracking-wide text-blue-700">Total Weight</p>
                   <p className="mt-1 text-xl font-bold text-blue-900">{item.totalWeightKg} kg</p>
                 </div>
-                <div className="rounded-xl bg-amber-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-amber-700">Units</p>
-                  <p className="mt-1 text-xl font-bold text-amber-900">{item.currentStock}</p>
+                <div className="rounded-xl bg-slate-100 p-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-600">Units</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900">{item.currentStock}</p>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center rounded-xl border border-gray-100 px-3 py-2 text-sm text-gray-600">
-                <span className="flex items-center gap-2"><Calendar className="h-4 w-4 text-[#4091c9]" /> {item.lastUpdated?.toDate ? item.lastUpdated.toDate().toLocaleString() : item.lastUpdated instanceof Date ? item.lastUpdated.toLocaleString() : item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : 'Live (Syncing...)'}</span>
+              <div className="mt-4 text-sm text-gray-500">
+                <span className="inline-flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-600">Updated {formatTimestamp(item.lastUpdated)}</span>
+                </span>
               </div>
             </button>
           ))}
@@ -425,29 +457,26 @@ export default function Inventory() {
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-left text-gray-700">
               <tr>
-                <th className="px-4 py-3 font-semibold">Timestamp</th>
-                <th className="px-4 py-3 font-semibold">Product</th>
-                <th className="px-4 py-3 font-semibold">Change</th>
-                <th className="px-4 py-3 font-semibold">Source</th>
-                <th className="px-4 py-3 font-semibold">Performed By</th>
+                <th className="px-4 py-3 font-semibold border-b border-gray-100 first:rounded-tl-lg">Timestamp</th>
+                <th className="px-4 py-3 font-semibold border-b border-gray-100">Product</th>
+                <th className="px-4 py-3 font-semibold border-b border-gray-100">Change</th>
+                <th className="px-4 py-3 font-semibold border-b border-gray-100">Source</th>
+                <th className="px-4 py-3 font-semibold border-b border-gray-100 last:rounded-tr-lg">Performed By</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {paginatedLogs.map((log) => {
                 const productName = products.find((product) => product.productId === log.productId)?.name || log.productId;
                 const changeLabel = log.changeQuantity >= 0 ? `+${log.changeQuantity}` : `${log.changeQuantity}`;
+                const changeClass = log.changeQuantity >= 0 ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold';
 
                 return (
                   <tr key={log.id}>
-                    <td className="px-4 py-3 text-gray-600">{log.timestamp?.toDate 
-                        ? log.timestamp.toDate().toLocaleString() 
-                        : log.timestamp 
-                        ? new Date(log.timestamp).toLocaleString() 
-                        : 'Pending'}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatTimestamp(log.timestamp)}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{productName}</td>
-                    <td className="px-4 py-3 text-gray-700">{changeLabel} units · {log.previousStock} → {log.newStock}</td>
+                    <td className="px-4 py-3 text-gray-700"><span className={changeClass}>{changeLabel}</span> units · {log.previousStock} → {log.newStock}</td>
                     <td className="px-4 py-3 text-gray-700">{log.source}</td>
-                    <td className="px-4 py-3 text-gray-600">{log.performedBy}</td>
+                    <td className="px-4 py-3 text-gray-600">{truncateId(log.performedBy)}</td>
                   </tr>
                 );
               })}

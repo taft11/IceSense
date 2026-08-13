@@ -343,9 +343,6 @@ export default function AdminDashboard() {
             <li>
               <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <span>Predictive Analysis</span>
-                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
-                  1
-                </span>
               </Link>
             </li>
             <li>
