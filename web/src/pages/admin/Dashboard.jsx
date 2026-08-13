@@ -28,6 +28,7 @@ export default function AdminDashboard() {
     temperature: 'Loading...',
     humidity: 'Loading...',
     waterLevel: 'Loading...',
+    waterDistance: null,
     stockProducedKg: 0,
     activeTrucks: 3,
   });
@@ -150,7 +151,10 @@ export default function AdminDashboard() {
           ...prev,
           temperature: temp !== undefined ? `${temp.toFixed(1)}°C` : 'N/A',
           humidity: hum !== undefined ? `${hum.toFixed(1)}%` : 'N/A',
-          waterLevel: dist !== undefined ? `${dist.toFixed(1)} cm` : 'N/A',
+          // raw numeric distance (cm) from sensor to water surface
+          waterDistance: dist !== undefined && dist !== null ? Number(dist) : null,
+          // legacy/secondary textual display preserved
+          waterLevel: dist !== undefined && dist !== null ? `${dist.toFixed(1)} cm` : 'N/A',
         }));
       }
     });

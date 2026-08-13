@@ -32,6 +32,42 @@ export default function Overview({ iotData, todayDate }) {
   const stockProducedKg = Number(iotData?.stockProducedKg || 0);
   const productionTargetPercent = stockProducedKg > 0 ? Math.round((stockProducedKg / dailyTargetKg) * 100) : 0;
 
+  // Water tank calibration constants
+  const TANK_TOTAL_HEIGHT = 43; // cm
+  const SENSOR_BLIND_ZONE = 25; // cm
+  const MAX_MEASURABLE_DEPTH = TANK_TOTAL_HEIGHT - SENSOR_BLIND_ZONE; // 18 cm
+
+  // Raw distance reading from top of tank to water surface (cm)
+  const rawDistance = typeof iotData?.waterDistance === 'number' ? iotData.waterDistance : null;
+
+  // Compute water depth (h) and percentage (P)
+  let waterDepth = null; // measured liquid height from bottom of sensor's measurable zone
+  let waterPercent = null;
+  let overflow = false;
+
+  if (rawDistance === null || Number.isNaN(rawDistance)) {
+    waterDepth = null;
+    waterPercent = null;
+  } else {
+    // h = total height - distance
+    const h = TANK_TOTAL_HEIGHT - rawDistance;
+
+    if (rawDistance < SENSOR_BLIND_ZONE) {
+      // Water has entered the blind zone — treat as full (or overflow)
+      waterDepth = MAX_MEASURABLE_DEPTH;
+      waterPercent = 100;
+      overflow = true;
+    } else if (rawDistance >= TANK_TOTAL_HEIGHT) {
+      // Sensor reads at or beyond tank bottom => empty
+      waterDepth = 0;
+      waterPercent = 0;
+    } else {
+      // Normal measurable range
+      waterDepth = Math.max(0, Math.min(h, MAX_MEASURABLE_DEPTH));
+      waterPercent = Math.max(0, Math.min((waterDepth / MAX_MEASURABLE_DEPTH) * 100, 100));
+    }
+  }
+
   const chartData = forecastDays.map((day) => ({
     day: day.label,
     'Historical Production': Math.round(day.total_kg_produced || 0),
@@ -72,12 +108,15 @@ export default function Overview({ iotData, todayDate }) {
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Water Tank Level</h3>
-            <span className="rounded-full border border-sky-200/60 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">88% Full</span>
+            <span className="rounded-full border border-sky-200/60 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+              {waterPercent !== null ? `${Math.round(waterPercent)}% Full` : 'N/A'}{overflow ? ' • OVERFLOW' : ''}
+            </span>
           </div>
           <div>
-            <p className="text-3xl font-bold text-slate-900">{iotData.waterLevel}</p>
+            <p className="text-3xl font-bold text-slate-900">{waterPercent !== null ? `${Math.round(waterPercent)}%` : iotData.waterLevel}</p>
+            <p className="mt-1 text-sm text-slate-500">{waterDepth !== null ? `${waterDepth.toFixed(1)} cm / ${MAX_MEASURABLE_DEPTH} cm Max Depth` : 'N/A'}</p>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-sky-500" style={{ width: '88%' }} />
+              <div className="h-full rounded-full bg-sky-500" style={{ width: `${waterPercent !== null ? Math.round(waterPercent) : 0}%` }} />
             </div>
           </div>
         </div>
