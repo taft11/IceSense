@@ -63,7 +63,7 @@ export default function Home() {
             <li className="flex items-start">
                <Smartphone className="mr-4 h-8 w-8 shrink-0 text-[#4091c9]" />
                <span className="text-lg text-gray-700">
-                  <strong className="text-gray-900">Seamless Ordering:</strong> Choose your ice type, pick your quantity, and place orders anytime from your phone or laptop.
+                  <strong className="text-gray-900">Seamless Ordering:</strong> Choose your ice type, pick your quantity, and place orders anytime.
                </span>
             </li>
             <li className="flex items-start">
