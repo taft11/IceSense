@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   AlertTriangle, 
   CalendarDays, 
@@ -28,13 +27,27 @@ import useDemandForecast from '../../hooks/useDemandForecast';
 
 // Helper for KG formatting
 const formatKg = (value) => `${Math.round(Number(value || 0)).toLocaleString()} kg`;
+const formatForecastDate = (date) => {
+  if (!date) return '';
+
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 // Custom Recharts Tooltip
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
+    const forecastDate = payload[0]?.payload?.date;
+
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-xs space-y-2">
-        <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">{label}</p>
+        <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">
+          {formatForecastDate(forecastDate) || label}
+        </p>
         {payload.map((entry, index) => (
           <div key={`item-${index}`} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
@@ -56,6 +69,7 @@ export default function DemandForecastPage() {
   // Prepare chart data
   const chartData = forecastDays.map((day) => ({
     day: day.label,
+    date: day.date,
     'Historical Production': Math.round(day.total_kg_produced || 0),
     'Predicted Demand': Math.round(day.total_kg_demanded || 0),
   }));
