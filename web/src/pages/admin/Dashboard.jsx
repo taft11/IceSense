@@ -67,6 +67,19 @@ export default function AdminDashboard() {
       return 'cancelled';
     }
 
+    if (
+      (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') &&
+      order.deliveryDate
+    ) {
+      const deliveryDate = new Date(`${order.deliveryDate}T00:00:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (!Number.isNaN(deliveryDate.getTime()) && deliveryDate < today) {
+        return 'cancelled';
+      }
+    }
+
     if (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') {
       return 'pending_payment';
     }
@@ -90,6 +103,13 @@ export default function AdminDashboard() {
   };
 
   const getOrderDateValue = (order) => {
+    if (order?.deliveryDate) {
+      const scheduledDate = new Date(`${order.deliveryDate}T00:00:00`);
+      if (!Number.isNaN(scheduledDate.getTime())) {
+        return scheduledDate.toISOString().split('T')[0];
+      }
+    }
+
     if (!order?.createdAt) return null;
 
     const createdAt = typeof order.createdAt?.toDate === 'function'
@@ -103,6 +123,13 @@ export default function AdminDashboard() {
     }
 
     return createdAt.toISOString().split('T')[0];
+  };
+
+  const getOrderScheduleTimestamp = (order) => {
+    if (!order?.deliveryDate) return Number.POSITIVE_INFINITY;
+
+    const scheduledDate = new Date(`${order.deliveryDate}T00:00:00`);
+    return Number.isNaN(scheduledDate.getTime()) ? Number.POSITIVE_INFINITY : scheduledDate.getTime();
   };
 
   const filteredOrders = allOrders.filter((order) => {
@@ -221,7 +248,12 @@ export default function AdminDashboard() {
         (snapshot) => {
           const parsedOrders = snapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .sort((a, b) => (b.createdAt?.toMillis?.() || b.createdAt || 0) - (a.createdAt?.toMillis?.() || a.createdAt || 0));
+            .sort((a, b) => {
+              const scheduleDifference = getOrderScheduleTimestamp(b) - getOrderScheduleTimestamp(a);
+              if (scheduleDifference !== 0) return scheduleDifference;
+
+              return (b.createdAt?.toMillis?.() || b.createdAt || 0) - (a.createdAt?.toMillis?.() || a.createdAt || 0);
+            });
 
           setAllOrders(parsedOrders);
           setOrdersLoading(false);

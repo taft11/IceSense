@@ -37,20 +37,29 @@ const defaultProducts = [
   },
   {
     productId: 'crushed-crate',
-    name: 'Crushed Ice Crates',
+    name: 'Crushed Ice 5kg',
     type: 'crushed',
-    packaging: 'crate',
-    weightKg: 70,
+    packaging: 'sack',
+    weightKg: 5,
     price: 180,
-    isMonitoredByScale: false,
+    isMonitoredByScale: true,
   },
   {
     productId: 'crushed-sack',
-    name: 'Crushed Ice Sack',
+    name: 'Crushed Ice 35kg',
     type: 'crushed',
     packaging: 'sack',
-    weightKg: 40,
+    weightKg: 35,
     price: 140,
+    isMonitoredByScale: true,
+  },
+  {
+    productId: 'crushed-50',
+    name: 'Crushed Ice 50kg',
+    type: 'crushed',
+    packaging: 'sack',
+    weightKg: 50,
+    price: 150,
     isMonitoredByScale: true,
   },
 ];
@@ -59,8 +68,33 @@ const defaultInventory = {
   'tube-5': { currentStock: 85, totalWeightKg: 425, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
   'tube-35': { currentStock: 42, totalWeightKg: 1470, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
   'tube-50': { currentStock: 124, totalWeightKg: 6200, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
-  'crushed-crate': { currentStock: 15, totalWeightKg: 1050, lastUpdated: new Date(), updateSource: 'manual_entry', scaleSensorId: null },
-  'crushed-sack': { currentStock: 20, totalWeightKg: 800, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
+  'crushed-crate': { currentStock: 0, totalWeightKg: 0, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
+  'crushed-sack': { currentStock: 0, totalWeightKg: 0, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
+  'crushed-50': { currentStock: 0, totalWeightKg: 0, lastUpdated: new Date(), updateSource: 'scale_sensor', scaleSensorId: 'ESP32_Scale_01' },
+};
+
+const normalizeCatalog = (catalog) => {
+  const normalized = catalog.map((product) => {
+    const currentDefinition = defaultProducts.find((defaultProduct) => defaultProduct.productId === product.productId);
+
+    if (!currentDefinition || currentDefinition.type !== 'crushed') {
+      return product;
+    }
+
+    return {
+      ...product,
+      name: currentDefinition.name,
+      packaging: currentDefinition.packaging,
+      weightKg: currentDefinition.weightKg,
+      isMonitoredByScale: true,
+    };
+  });
+
+  const missingCrushedProducts = defaultProducts.filter(
+    (defaultProduct) => defaultProduct.type === 'crushed' && !normalized.some((product) => product.productId === defaultProduct.productId)
+  );
+
+  return [...normalized, ...missingCrushedProducts];
 };
 
 export default function Inventory() {
@@ -146,10 +180,10 @@ export default function Inventory() {
 
         const productsRef = collection(db, 'products');
         const productsSnapshot = await getDocs(productsRef);
-        const catalog = productsSnapshot.docs.map((docSnapshot) => ({
+        const catalog = normalizeCatalog(productsSnapshot.docs.map((docSnapshot) => ({
           productId: docSnapshot.id,
           ...docSnapshot.data(),
-        }));
+        })));
         setProducts(catalog);
       } catch (error) {
         console.error('Unable to load inventory data', error);
@@ -198,7 +232,10 @@ export default function Inventory() {
 
   const inventoryRows = useMemo(() => {
     const inventoryMap = Object.fromEntries(firestoreInventory.map((item) => [item.productId, item]));
-    const scaleBreakdown = scaleInventory?.sacks_breakdown || {};
+    const scaleSections = {
+      tube: scaleInventory?.tube_ice || {},
+      crushed: scaleInventory?.crushed_ice || {},
+    };
 
     const orderedProducts = [...products].sort((left, right) => {
       const leftGroup = left.type === 'tube' ? 0 : 1;
@@ -228,25 +265,15 @@ export default function Inventory() {
       let scaleSensorId = stockInfo.scaleSensorId || null;
 
       if (isScaleMonitored) {
-        let scaleKey = null;
+        const scaleSection = scaleSections[product.type] || {};
+        const scaleBreakdown = scaleSection.sacks_breakdown || {};
+        const scaleKey = `${Number(product.weightKg || 0)}kg_sacks`;
+        const hasMatchingBreakdown = Object.prototype.hasOwnProperty.call(scaleBreakdown, scaleKey);
+        const fallbackStock = scaleSection.total_sacks ?? scaleSection.total_sacks_count ?? 0;
 
-        switch (product.productId) {
-          case 'tube-50':
-            scaleKey = '50kg_sacks';
-            break;
-          case 'tube-35':
-            scaleKey = '35kg_sacks';
-            break;
-          case 'tube-5':
-            scaleKey = '5kg_sacks';
-            break;
-          default:
-            scaleKey = null;
-        }
-
-        currentStock = scaleKey ? Number(scaleBreakdown[scaleKey] || 0) : 0;
+        currentStock = Number(hasMatchingBreakdown ? scaleBreakdown[scaleKey] : fallbackStock);
         totalWeightKg = currentStock * Number(product.weightKg || 0);
-        lastUpdated = scaleInventory?.last_updated ? new Date(scaleInventory.last_updated) : stockInfo.lastUpdated;
+        lastUpdated = scaleSection.last_updated ? new Date(scaleSection.last_updated) : stockInfo.lastUpdated;
         updateSource = 'scale_sensor';
         scaleSensorId = 'ESP32_Scale_01';
       }

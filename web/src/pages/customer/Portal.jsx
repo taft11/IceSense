@@ -81,6 +81,41 @@ const getEarliestDeliveryDate = (referenceDate = new Date()) => {
   return addDays(currentDate, 1);
 };
 
+const optimizeReceiptImage = (file) => {
+  if (!file?.type?.startsWith('image/')) return Promise.resolve(file);
+
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const maxWidth = 1600;
+      const scale = Math.min(1, maxWidth / image.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+
+      canvas.toBlob(
+        (blob) => {
+          resolve(blob ? new File([blob], 'payment-receipt.jpg', { type: 'image/jpeg' }) : file);
+        },
+        'image/jpeg',
+        0.82
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+    image.src = objectUrl;
+  });
+};
+
 export default function CustomerPortal() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -565,7 +600,11 @@ export default function CustomerPortal() {
       const ordersRef = collection(db, 'orders');
 
       const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
-      await uploadBytes(receiptRef, receiptFile);
+      const optimizedReceipt = await optimizeReceiptImage(receiptFile);
+      await uploadBytes(receiptRef, optimizedReceipt, {
+        contentType: optimizedReceipt.type || 'image/jpeg',
+        cacheControl: 'public,max-age=31536000,immutable',
+      });
       const receiptUrl = await getDownloadURL(receiptRef);
 
       const orderPayload = {

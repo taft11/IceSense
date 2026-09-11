@@ -69,9 +69,10 @@ export default function Orders({
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
 
-    if (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') {
-      return { label: 'Pending Payment Verification', className: 'bg-yellow-100 text-yellow-700' };
-    }
+    const deliveryDate = order?.deliveryDate ? new Date(`${order.deliveryDate}T00:00:00`) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
 
     if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
       return { label: 'Cancelled', className: 'bg-red-100 text-red-700' };
@@ -86,6 +87,14 @@ export default function Orders({
       paymentStatus === 'delivered'
     ) {
       return { label: 'Delivered', className: 'bg-green-100 text-green-700' };
+    }
+
+    if ((paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') && isPastOrder) {
+      return { label: 'Cancelled', className: 'bg-red-100 text-red-700' };
+    }
+
+    if (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') {
+      return { label: 'Pending Payment Verification', className: 'bg-yellow-100 text-yellow-700' };
     }
 
     if (normalizedStatus === 'processing' || paymentStatus === 'paid') {
@@ -104,23 +113,20 @@ export default function Orders({
       .some((value) => String(value).toLowerCase().includes(query));
   });
 
-  const getOrderDateLabel = (order) => {
-    if (!order?.createdAt) return 'No date';
+  const getScheduleLabel = (order) => {
+    if (!order?.deliveryDate) return 'No schedule';
 
-    const date = typeof order.createdAt?.toDate === 'function'
-      ? order.createdAt.toDate()
-      : order.createdAt instanceof Date
-        ? order.createdAt
-        : new Date(order.createdAt);
+    const date = new Date(`${order.deliveryDate}T00:00:00`);
 
-    if (Number.isNaN(date.getTime())) return 'No date';
+    if (Number.isNaN(date.getTime())) return 'No schedule';
 
-    return date.toLocaleString('en-US', {
+    const dateLabel = date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
     });
+    const timeLabel = order.deliveryTimeSlot || order.deliverySlot || 'Time not selected';
+
+    return `${dateLabel} · ${timeLabel}`;
   };
 
   const getTotalWeightKg = (order) => {
@@ -144,7 +150,12 @@ export default function Orders({
 
   const isPendingVerification = (order) => {
     const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
-    return paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending' || paymentStatus === 'awaiting_verification';
+    const deliveryDate = order?.deliveryDate ? new Date(`${order.deliveryDate}T00:00:00`) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
+
+    return !isPastOrder && (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending' || paymentStatus === 'awaiting_verification');
   };
 
   const getReceiptPreviewUrl = (order) => {
@@ -365,7 +376,7 @@ export default function Orders({
                         <tr className="align-top">
                           <td className="px-4 py-3">
                             <p className="font-semibold text-gray-800">#{order.id?.slice(0, 8).toUpperCase()}</p>
-                            <p className="mt-1 text-xs text-gray-500">{getOrderDateLabel(order)}</p>
+                            <p className="mt-1 text-xs text-gray-500"> {getScheduleLabel(order)}</p>
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-semibold text-gray-800">{order.customerName || 'Unknown customer'}</p>
@@ -398,24 +409,24 @@ export default function Orders({
                           </td>
                           <td className="px-4 py-3 text-center">
                             {isPendingVerification(order) ? (
-                              <div className="flex justify-center gap-2">
+                              <div className="grid min-w-[270px] grid-cols-3 gap-2">
                                 <button
                                   type="button"
                                   onClick={() => receiptPreviewUrl && onOpenReceiptPreview(receiptPreviewUrl)}
                                   disabled={!receiptPreviewUrl}
-                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="h-9 min-w-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   View Payment
                                 </button>
                                 <button
                                   onClick={() => openApproveConfirm(order)}
-                                  className="rounded-full bg-[#4091c9] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d75aa]"
+                                  className="h-9 min-w-0 whitespace-nowrap rounded-full bg-[#4091c9] px-2 text-xs font-semibold text-white transition hover:bg-[#2d75aa]"
                                 >
                                   Approve
                                 </button>
                                 <button
                                   onClick={() => openRejectConfirm(order)}
-                                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
+                                  className="h-9 min-w-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
                                 >
                                   Reject
                                 </button>
@@ -424,7 +435,7 @@ export default function Orders({
                               <button
                                 type="button"
                                 onClick={() => toggleOrderDetails(order.id)}
-                                className="text-sm font-semibold text-[#4091c9] underline-offset-2 transition hover:text-[#2d75aa] hover:underline"
+                                className="h-9 whitespace-nowrap px-3 text-sm font-semibold text-[#4091c9] underline-offset-2 transition hover:text-[#2d75aa] hover:underline"
                               >
                                 {expandedOrderId === order.id ? 'Hide details' : 'Details'}
                               </button>
@@ -439,7 +450,7 @@ export default function Orders({
                                   <p className="font-semibold text-slate-800">Customer Details</p>
                                   <p className="mt-2 text-sm text-slate-600">{order.customerName || 'Unknown customer'}</p>
                                   <p className="text-sm text-slate-600">{order.customerEmail || 'No email'}</p>
-                                  <p className="mt-2 text-xs text-slate-500">Order placed: {getOrderDateLabel(order)}</p>
+                                  <p className="mt-2 text-xs text-slate-500">Scheduled: {getScheduleLabel(order)}</p>
                                 </div>
 
                                 <div>
