@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { createWorker } from 'tesseract.js';
 import { auth, db, storage } from '../../services/firebase';
 import { PRODUCTS } from './data/products';
 import HeaderNav from './components/HeaderNav';
@@ -116,6 +117,65 @@ const optimizeReceiptImage = (file) => {
   });
 };
 
+const extractReceiptReferenceNumber = (text) => {
+  const normalizedText = String(text || '').replace(/\r/g, '\n');
+  const labelMatch = normalizedText.match(/(?:ref(?:erence)?|reference)\s*\.?\s*(?:no\.?|number|#)\s*[:#.-]?/i);
+
+  if (!labelMatch?.index && labelMatch?.index !== 0) return '';
+
+  const textAfterLabel = normalizedText.slice(labelMatch.index + labelMatch[0].length, labelMatch.index + labelMatch[0].length + 80);
+  const numericCandidates = textAfterLabel.match(/\d[\d\s.:|_\-/]*\d/g) || [];
+  const numericReference = numericCandidates
+    .map((candidate) => candidate.replace(/\D/g, ''))
+    .filter((candidate) => candidate.length >= 6)
+    .filter((candidate) => {
+      if (!/^\d{8}$/.test(candidate)) return true;
+
+      const year = Number(candidate.slice(0, 4));
+      const month = Number(candidate.slice(4, 6));
+      const day = Number(candidate.slice(6, 8));
+      return year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31;
+    })
+    .sort((left, right) => right.length - left.length)[0];
+
+  if (numericReference) return numericReference;
+
+  const candidateMatch = textAfterLabel.match(/[a-z0-9][a-z0-9-]{5,}/i);
+
+  return candidateMatch?.[0].replace(/[^a-z0-9]/gi, '') || '';
+};
+
+const prepareReceiptForOcr = (file, cropToReferenceArea = false) => {
+  if (!file?.type?.startsWith('image/')) return Promise.resolve(file);
+
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const sourceY = cropToReferenceArea ? image.height * 0.25 : 0;
+      const sourceHeight = cropToReferenceArea ? image.height * 0.5 : image.height;
+      const scale = Math.min(3, Math.max(1.5, 2000 / image.width));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+
+      const context = canvas.getContext('2d');
+      context.filter = 'grayscale(1) contrast(1.35)';
+      context.drawImage(image, 0, sourceY, image.width, sourceHeight, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+
+      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', 0.9);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+    image.src = objectUrl;
+  });
+};
+
 export default function CustomerPortal() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -189,6 +249,8 @@ export default function CustomerPortal() {
   const [isDeliveryExpanded, setIsDeliveryExpanded] = useState(false);
   const [isCheckoutConfirmOpen, setIsCheckoutConfirmOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptReferenceNumber, setReceiptReferenceNumber] = useState('');
+  const [isExtractingReference, setIsExtractingReference] = useState(false);
   const [receiptError, setReceiptError] = useState('');
 
   const earliestDeliveryDate = useMemo(() => getEarliestDeliveryDate(), []);
@@ -583,6 +645,11 @@ export default function CustomerPortal() {
       return;
     }
 
+    if (!receiptReferenceNumber.trim()) {
+      setReceiptError('Please enter the receipt reference number before placing your order.');
+      return;
+    }
+
     const fullName = getFullName();
     const normalizedDeliveryDate = deliveryDate || toDateInputValue(earliestDeliveryDate);
     const normalizedDeliverySlot = DELIVERY_TIME_SLOTS.find((slot) => slot.id === deliverySlot)?.label || DELIVERY_TIME_SLOTS[0].label;
@@ -621,6 +688,7 @@ export default function CustomerPortal() {
         paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
         readyForDelivery: false,
         receiptUrl,
+        paymentReferenceNumber: receiptReferenceNumber.trim(),
         adminNotes: '',
         verifiedAt: null,
         verifiedBy: null,
@@ -656,6 +724,7 @@ export default function CustomerPortal() {
 
       setCartItems([]);
       setReceiptFile(null);
+      setReceiptReferenceNumber('');
       setOrderStatus('success');
       setPendingOrderId(orderDocRef.id);
       setIsCartOpen(false);
@@ -693,6 +762,48 @@ export default function CustomerPortal() {
   const confirmCheckoutOrder = () => {
     setIsCheckoutConfirmOpen(false);
     handleOrder();
+  };
+
+  const handleReceiptFileChange = async (file) => {
+    setReceiptFile(file);
+    setReceiptReferenceNumber('');
+    setReceiptError('');
+
+    if (!file) return;
+
+    setIsExtractingReference(true);
+
+    let worker;
+
+    try {
+      worker = await createWorker('eng');
+      const receiptVariants = [
+        file,
+        await prepareReceiptForOcr(file),
+        await prepareReceiptForOcr(file, true),
+      ];
+      const detectedReferences = [];
+
+      for (const receiptVariant of receiptVariants) {
+        const result = await worker.recognize(receiptVariant);
+        const detectedReferenceNumber = extractReceiptReferenceNumber(result.data.text);
+
+        if (detectedReferenceNumber) {
+          detectedReferences.push(detectedReferenceNumber);
+        }
+      }
+
+      const detectedReferenceNumber = detectedReferences.sort((left, right) => right.length - left.length)[0] || '';
+
+      if (detectedReferenceNumber) {
+        setReceiptReferenceNumber(detectedReferenceNumber);
+      }
+    } catch (error) {
+      console.error('Receipt reference extraction failed', error);
+    } finally {
+      await worker?.terminate();
+      setIsExtractingReference(false);
+    }
   };
 
   const closePendingOrderModal = () => {
@@ -1001,6 +1112,7 @@ export default function CustomerPortal() {
         onCancelCheckout={() => {
           setIsCheckoutConfirmOpen(false);
           setReceiptFile(null);
+          setReceiptReferenceNumber('');
         }}
         getRemainingStock={getRemainingStockForProduct}
         deliveryDate={deliveryDate}
@@ -1016,7 +1128,10 @@ export default function CustomerPortal() {
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
         hasAddress={hasSavedAddress}
         receiptFile={receiptFile}
-        onReceiptFileChange={setReceiptFile}
+        receiptReferenceNumber={receiptReferenceNumber}
+        onReceiptReferenceNumberChange={setReceiptReferenceNumber}
+        isExtractingReference={isExtractingReference}
+        onReceiptFileChange={handleReceiptFileChange}
         receiptError={receiptError}
       />
 

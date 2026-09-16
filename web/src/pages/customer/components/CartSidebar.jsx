@@ -27,6 +27,9 @@ export default function CartSidebar({
   isCheckoutConfirmOpen,
   hasAddress,
   receiptFile,
+  receiptReferenceNumber,
+  onReceiptReferenceNumberChange,
+  isExtractingReference,
   onReceiptFileChange,
   receiptError,
 }) {
@@ -108,6 +111,22 @@ export default function CartSidebar({
                     onChange={(event) => onReceiptFileChange(event.target.files?.[0] || null)}
                     className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
                   />
+                  <label className="block text-sm font-semibold text-gray-800" htmlFor="receiptReferenceNumber">
+                    Receipt reference number
+                  </label>
+                  <input
+                    id="receiptReferenceNumber"
+                    type="text"
+                    value={receiptReferenceNumber}
+                    onChange={(event) => onReceiptReferenceNumberChange(event.target.value)}
+                    placeholder="Found beside Ref no."
+                    autoComplete="off"
+                    required
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+                  />
+                  <p className="text-xs text-gray-500">
+                    {isExtractingReference ? 'Reading the reference number from your receipt...' : 'Check this value and correct it if needed.'}
+                  </p>
                   {receiptError && <p className="text-sm text-red-600">{receiptError}</p>}
                 </div>
               </div>
@@ -123,8 +142,8 @@ export default function CartSidebar({
                 <button
                   type="button"
                   onClick={onConfirmCheckout}
-                  disabled={!receiptFile}
-                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${receiptFile ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'bg-slate-300 text-slate-600 cursor-not-allowed'}`}
+                  disabled={!receiptFile || !receiptReferenceNumber.trim() || isExtractingReference}
+                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${receiptFile && receiptReferenceNumber.trim() && !isExtractingReference ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'bg-slate-300 text-slate-600 cursor-not-allowed'}`}
                 >
                   Place Order
                 </button>
