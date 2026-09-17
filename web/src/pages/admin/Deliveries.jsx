@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { createUserWithEmailAndPassword, deleteUser, getAuth, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { Plus, Trash2 } from 'lucide-react';
 import { db } from '../../services/firebase';
+
+const driverAccountApp = getApps().find((app) => app.name === 'driver-account-creation')
+  || initializeApp(getApp().options, 'driver-account-creation');
+const driverAuth = getAuth(driverAccountApp);
 
 const DRIVER_ROLES = ['driver', 'delivery', 'deliverer'];
 const FILTERS = {
@@ -21,6 +28,13 @@ export default function Deliveries() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeDateFilter, setActiveDateFilter] = useState('');
   const [confirmAssignment, setConfirmAssignment] = useState(null);
+  const [confirmDriverDelete, setConfirmDriverDelete] = useState(null);
+  const [driverForm, setDriverForm] = useState({ fullName: '', email: '', contactNumber: '', password: '' });
+  const [savingDriver, setSavingDriver] = useState(false);
+  const [deletingDriverId, setDeletingDriverId] = useState(null);
+  const [driverMessage, setDriverMessage] = useState('');
+  const [driverError, setDriverError] = useState('');
+  const [showDriverManagement, setShowDriverManagement] = useState(false);
   const ORDERS_PER_PAGE = 6;
 
   useEffect(() => {
@@ -65,6 +79,17 @@ export default function Deliveries() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!driverMessage && !driverError) return undefined;
+
+    const feedbackTimer = window.setTimeout(() => {
+      setDriverMessage('');
+      setDriverError('');
+    }, 4000);
+
+    return () => window.clearTimeout(feedbackTimer);
+  }, [driverMessage, driverError]);
+
   const openAssignConfirm = (orderId, driverId) => {
     const selectedDriver = drivers.find((driver) => driver.id === driverId);
     setConfirmAssignment({ orderId, driverId, selectedDriver });
@@ -96,6 +121,93 @@ export default function Deliveries() {
     } finally {
       setSavingOrderId(null);
       closeAssignConfirm();
+    }
+  };
+
+  const handleDriverFormChange = (event) => {
+    const { name, value } = event.target;
+    setDriverForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleAddDriver = async (event) => {
+    event.preventDefault();
+    const fullName = driverForm.fullName.trim();
+    const email = driverForm.email.trim().toLowerCase();
+    const contactNumber = driverForm.contactNumber.trim();
+    const password = driverForm.password;
+
+    if (!fullName || !email || !contactNumber || !password) {
+      setDriverError('Please complete the driver name, contact number, email, and password.');
+      setDriverMessage('');
+      return;
+    }
+
+    if (password.length < 8) {
+      setDriverError('The password must be at least 8 characters long.');
+      setDriverMessage('');
+      return;
+    }
+
+    let createdAuthUser = null;
+    try {
+      setSavingDriver(true);
+      setDriverError('');
+      setDriverMessage('');
+      const credentials = await createUserWithEmailAndPassword(driverAuth, email, password);
+      createdAuthUser = credentials.user;
+
+      await setDoc(doc(db, 'users', createdAuthUser.uid), {
+        fullName,
+        email,
+        contactNumber,
+        role: 'driver',
+        accountStatus: 'active',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await signOut(driverAuth);
+      setDriverForm({ fullName: '', email: '', contactNumber: '', password: '' });
+      setDriverMessage(`${fullName} was added as a driver.`);
+    } catch (err) {
+      console.error('Unable to add driver', err);
+      if (createdAuthUser) {
+        try {
+          await deleteUser(createdAuthUser);
+        } catch (cleanupError) {
+          console.error('Unable to clean up incomplete driver account', cleanupError);
+        }
+      }
+
+      const errorMessages = {
+        'auth/email-already-in-use': 'That email is already registered. Use a different email address.',
+        'auth/invalid-email': 'Enter a valid email address.',
+        'auth/operation-not-allowed': 'Email/password sign-in is not enabled in Firebase Authentication. Enable it in the Firebase Console.',
+        'auth/password-does-not-meet-requirements': 'The password does not meet Firebase security requirements.',
+        'auth/weak-password': 'Choose a stronger password with at least 8 characters.',
+        'permission-denied': 'You do not have permission to create driver accounts. Deploy the latest Firestore rules and try again.',
+      };
+      setDriverError(errorMessages[err.code] || 'Unable to create the driver account right now. Please try again.');
+    } finally {
+      if (driverAuth.currentUser) await signOut(driverAuth);
+      setSavingDriver(false);
+    }
+  };
+
+  const handleDeleteDriver = async () => {
+    if (!confirmDriverDelete?.id) return;
+
+    try {
+      setDeletingDriverId(confirmDriverDelete.id);
+      setDriverError('');
+      setDriverMessage('');
+      await deleteDoc(doc(db, 'users', confirmDriverDelete.id));
+      setDriverMessage(`${confirmDriverDelete.name} was removed from the driver list.`);
+    } catch (err) {
+      console.error('Unable to delete driver', err);
+      setDriverError('Unable to delete the driver right now. Please try again.');
+    } finally {
+      setDeletingDriverId(null);
+      setConfirmDriverDelete(null);
     }
   };
 
@@ -198,7 +310,14 @@ export default function Deliveries() {
           <h2 className="text-2xl font-bold text-gray-800">Delivery assignments</h2>
           <p className="mt-2 text-gray-600">Assign orders to specific Drivers</p>
         </div>
-        
+        <button
+          type="button"
+          onClick={() => setShowDriverManagement((isVisible) => !isVisible)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9]"
+        >
+          <Plus className={`h-4 w-4 transition-transform ${showDriverManagement ? 'rotate-45' : ''}`} />
+          {showDriverManagement ? 'Hide drivers' : 'Manage drivers'}
+        </button>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -245,6 +364,61 @@ export default function Deliveries() {
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {showDriverManagement && (
+      <section className="mt-8 border-y border-slate-200 py-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Drivers</h3>
+            <p className="text-sm text-gray-600">Manage the drivers available for assignment.</p>
+          </div>
+          <span className="text-sm font-semibold text-slate-500">{drivers.length} driver{drivers.length === 1 ? '' : 's'}</span>
+        </div>
+
+        {driverError && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{driverError}</div>}
+        {driverMessage && <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{driverMessage}</div>}
+
+        <form onSubmit={handleAddDriver} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Full name</span>
+            <input name="fullName" value={driverForm.fullName} onChange={handleDriverFormChange} required placeholder="Juan Dela Cruz" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Email</span>
+            <input type="email" name="email" value={driverForm.email} onChange={handleDriverFormChange} required placeholder="driver@example.com" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Phone number</span>
+            <input name="contactNumber" value={driverForm.contactNumber} onChange={handleDriverFormChange} required placeholder="09171234567" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Password</span>
+            <input type="password" name="password" value={driverForm.password} onChange={handleDriverFormChange} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+          </label>
+          <button type="submit" disabled={savingDriver} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#4091c9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:opacity-60">
+            <Plus className="h-4 w-4" /> {savingDriver ? 'Adding...' : 'Add Driver'}
+          </button>
+        </form>
+
+        {drivers.length > 0 && (
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left font-semibold text-gray-700">Driver</th><th className="px-4 py-3 text-left font-semibold text-gray-700">Phone</th><th className="px-4 py-3 text-right font-semibold text-gray-700">Action</th></tr></thead>
+              <tbody className="divide-y divide-gray-200">
+                {drivers.map((driver) => {
+                  const driverName = driver.fullName || driver.name || driver.displayName || driver.email || driver.id;
+                  return <tr key={driver.id}>
+                    <td className="px-4 py-3"><p className="font-semibold text-gray-800">{driverName}</p><p className="text-xs text-gray-500">{driver.email || 'No email'}</p></td>
+                    <td className="px-4 py-3 text-gray-600">{driver.contactNumber || 'No phone number'}</td>
+                    <td className="px-4 py-3 text-right"><button type="button" onClick={() => setConfirmDriverDelete({ id: driver.id, name: driverName })} disabled={deletingDriverId === driver.id} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
       )}
 
       {loading ? (
@@ -365,6 +539,19 @@ export default function Deliveries() {
               >
                 Yes, confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDriverDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">Delete driver?</h3>
+            <p className="mt-2 text-sm text-gray-600">This will remove {confirmDriverDelete.name} from the driver list and future assignments.</p>
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setConfirmDriverDelete(null)} className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleDeleteDriver} disabled={deletingDriverId === confirmDriverDelete.id} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">{deletingDriverId === confirmDriverDelete.id ? 'Deleting...' : 'Yes, delete driver'}</button>
             </div>
           </div>
         </div>

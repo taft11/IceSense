@@ -23,9 +23,9 @@ function Layout() {
         If on other pages -> Solid white, sticky.
       */}
       {!isLogin && !isAdminLogin && !isPortal && !isAdmin && (
-        <nav className={`w-full z-50 transition-all duration-300 ${isHome ? 'absolute top-0 bg-transparent' : 'sticky top-0 bg-white border-b border-gray-200 shadow-sm'}`}>
+        <nav className={`site-nav w-full z-50 transition-all duration-300 ${isHome ? 'absolute top-0 bg-transparent' : 'sticky top-0 bg-white border-b border-gray-200 shadow-sm'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-24">
+            <div className="site-nav-inner flex justify-between h-24">
               
               {/* Logo */}
               <div className="flex items-center">
@@ -39,7 +39,7 @@ function Layout() {
               </div>
 
               {/* Links */}
-              <div className="flex items-center space-x-8">
+              <div className="site-nav-links flex items-center space-x-8">
                 <Link to="/login" className={`font-semibold transition ${isHome ? 'text-gray-200 hover:text-white' : 'text-gray-600 hover:text-blue-600'}`}>Login</Link>
                 <Link to="/login" className="bg-[#4091c9] hover:bg-[#2d75aa] text-white px-6 py-3 rounded-[28px_8px_28px_8px] font-bold transition shadow-lg">
                   Order Ice

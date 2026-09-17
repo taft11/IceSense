@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const [adminUid, setAdminUid] = useState(null);
   const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
   const [activeDateFilter, setActiveDateFilter] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const ORDERS_PER_PAGE = 10;
 
@@ -355,8 +356,59 @@ export default function AdminDashboard() {
     }
   };
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [mobileMenuOpen]);
+
   return (
     <div className="flex min-h-screen bg-[#f8f9fa] font-sans text-gray-800">
+      <header className="admin-mobile-header flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:hidden">
+        <h2 className="text-xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
+        <button
+          type="button"
+          aria-label={mobileMenuOpen ? 'Close admin navigation' : 'Open admin navigation'}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen((isOpen) => !isOpen)}
+          className="rounded-xl p-3 text-gray-700 transition hover:bg-sky-50 hover:text-[#4091c9]"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </header>
+
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close admin navigation"
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-900/30 md:hidden"
+        />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-gray-200 bg-white p-6 shadow-xl transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="text-2xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
+          <button type="button" aria-label="Close admin navigation" onClick={() => setMobileMenuOpen(false)} className="rounded-xl p-2 text-gray-500 hover:bg-slate-50">
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+        <nav className="flex-1">
+          <ul className="space-y-1.5">
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/overview" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'overview' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Overview</Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Orders</span><span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{pendingOrders || 3}</span></Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Deliveries</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
+          </ul>
+        </nav>
+        <button onClick={handleSignOut} className="w-full rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Sign out</button>
+      </aside>
       
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-gray-200 bg-white p-6 shadow-sm md:flex">
@@ -409,7 +461,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
+      <main className="admin-main ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
         <div className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6">
           <Routes>
             <Route index element={<Overview iotData={iotData} todayDate={todayDate} />} />

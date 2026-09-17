@@ -14,6 +14,7 @@ export default function OrderView({
   onQuantityChange,
   onAddToCart,
   orderStatus,
+  cartAddSuccess,
   remainingStock,
 }) {
   const isAddDisabled = orderStatus !== 'idle' || activeStock === 0 || remainingStock <= 0;
@@ -183,7 +184,11 @@ export default function OrderView({
                 orderStatus === 'success' ? 'bg-green-500 text-white' : ''
               } ${activeStock === 0 || remainingStock <= 0 ? 'cursor-not-allowed bg-slate-200 text-slate-500' : ''}`}
             >
-              {orderStatus === 'idle' && activeStock > 0 && remainingStock > 0 && <><ShoppingCart className="mr-2 h-6 w-6" /> Add to Cart</>}
+              {orderStatus === 'idle' && activeStock > 0 && remainingStock > 0 && (
+                <span className={cartAddSuccess ? 'cart-add-success' : ''}>
+                  {cartAddSuccess ? <><CheckCircle className="mr-2 inline h-6 w-6" /> Added to Cart ✓</> : <><ShoppingCart className="mr-2 inline h-6 w-6" /> Add to Cart</>}
+                </span>
+              )}
               {orderStatus === 'processing' && <><Snowflake className="mr-2 h-6 w-6 animate-spin" /> Processing...</>}
               {orderStatus === 'success' && <><CheckCircle className="mr-2 h-6 w-6" /> Added to Cart</>}
               {(activeStock === 0 || remainingStock <= 0) && 'Out of Stock'}

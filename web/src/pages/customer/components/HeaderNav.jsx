@@ -8,12 +8,14 @@ export default function HeaderNav({
   onSelectAccountSection,
   onOpenCart,
   cartItemCount,
+  cartButtonRef,
+  isCartAnimating,
   onLogout,
   loggingOut,
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="customer-header mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 p-2 shadow-sm">
             <img src="/logo.png" alt="Bella Erin Tube Ice Logo" className="h-full w-full object-contain" />
@@ -24,7 +26,7 @@ export default function HeaderNav({
           </div>
         </div>
 
-        <nav className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <nav className="customer-nav ml-auto flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => onViewChange('order')}
@@ -42,7 +44,8 @@ export default function HeaderNav({
           <button
             type="button"
             onClick={onOpenCart}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#4091c9] hover:text-[#4091c9]"
+            ref={cartButtonRef}
+            className={`inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#4091c9] hover:text-[#4091c9] ${isCartAnimating ? 'cart-target-pulse' : ''}`}
           >
             <ShoppingCart className="h-4 w-4" />
             Cart

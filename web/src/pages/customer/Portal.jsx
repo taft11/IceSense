@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
@@ -197,6 +197,8 @@ export default function CustomerPortal() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [orderStatus, setOrderStatus] = useState('idle');
+  const [cartAddSuccess, setCartAddSuccess] = useState(false);
+  const [flyToCart, setFlyToCart] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [pendingOrderId, setPendingOrderId] = useState(null);
   const [isPendingOrderModalOpen, setIsPendingOrderModalOpen] = useState(false);
@@ -252,6 +254,8 @@ export default function CustomerPortal() {
   const [receiptReferenceNumber, setReceiptReferenceNumber] = useState('');
   const [isExtractingReference, setIsExtractingReference] = useState(false);
   const [receiptError, setReceiptError] = useState('');
+  const cartButtonRef = useRef(null);
+  const flyToCartTimerRef = useRef(null);
 
   const earliestDeliveryDate = useMemo(() => getEarliestDeliveryDate(), []);
   const maxDeliveryDate = useMemo(() => addDays(new Date(), 14), []);
@@ -290,6 +294,10 @@ export default function CustomerPortal() {
 
     return () => window.clearTimeout(timer);
   }, [toast.visible]);
+
+  useEffect(() => () => {
+    if (flyToCartTimerRef.current) window.clearTimeout(flyToCartTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -471,6 +479,36 @@ export default function CustomerPortal() {
     setQuantity(Math.min(nextQuantity, activeStock));
   };
 
+  const startFlyToCartAnimation = (sourceElement) => {
+    if (
+      typeof window === 'undefined' ||
+      !sourceElement ||
+      !cartButtonRef.current ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) return;
+
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const cartRect = cartButtonRef.current.getBoundingClientRect();
+    const startX = sourceRect.left + (sourceRect.width / 2);
+    const startY = sourceRect.top + (sourceRect.height / 2);
+    const endX = cartRect.left + (cartRect.width / 2);
+    const endY = cartRect.top + (cartRect.height / 2);
+    const offsetX = endX - startX;
+    const offsetY = endY - startY;
+
+    if (flyToCartTimerRef.current) window.clearTimeout(flyToCartTimerRef.current);
+    setFlyToCart({
+      id: Date.now(),
+      startX,
+      startY,
+      offsetX,
+      offsetY,
+      midX: offsetX * 0.62,
+      midY: (offsetY * 0.52) - Math.min(120, Math.max(48, Math.abs(offsetX) * 0.16)),
+    });
+    flyToCartTimerRef.current = window.setTimeout(() => setFlyToCart(null), 760);
+  };
+
   const addToCart = (event) => {
     event.preventDefault();
     if (!activeProduct) return;
@@ -479,6 +517,8 @@ export default function CustomerPortal() {
     const qtyToAdd = Math.min(quantity, Math.max(remainingStock, 0));
 
     if (qtyToAdd <= 0) return;
+
+    startFlyToCartAnimation(event.nativeEvent.submitter);
 
     setCartItems((prev) => {
       const existingItem = prev.find((item) => item.productId === selectedProductId);
@@ -502,7 +542,9 @@ export default function CustomerPortal() {
 
     setQuantity(1);
     setOrderStatus('idle');
+    setCartAddSuccess(true);
     setToast({ visible: true, message: `${qtyToAdd} ${activeProduct.name} added to cart.` });
+    setTimeout(() => setCartAddSuccess(false), 1200);
   };
 
   const updateCartItemQuantity = (productId, delta) => {
@@ -1032,11 +1074,13 @@ export default function CustomerPortal() {
         onSelectAccountSection={handleSelectAccountSection}
         onOpenCart={() => setIsCartOpen(true)}
         cartItemCount={cartItemCount}
+        cartButtonRef={cartButtonRef}
+        isCartAnimating={Boolean(flyToCart)}
         onLogout={handleLogout}
         loggingOut={loggingOut}
       />
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="customer-main mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl pb-8">
           {activeView === 'order' ? (
             <OrderView
@@ -1053,6 +1097,7 @@ export default function CustomerPortal() {
               onQuantityChange={handleQuantityChange}
               onAddToCart={addToCart}
               orderStatus={orderStatus}
+              cartAddSuccess={cartAddSuccess}
               remainingStock={getRemainingStockForProduct(selectedProductId)}
             />
           ) : activeView === 'orders' ? (
@@ -1091,6 +1136,23 @@ export default function CustomerPortal() {
           )}
         </div>
       </main>
+
+      {flyToCart && (
+        <div
+          aria-hidden="true"
+          className="fly-to-cart-item"
+          style={{
+            left: flyToCart.startX,
+            top: flyToCart.startY,
+            '--fly-end-x': `${flyToCart.offsetX}px`,
+            '--fly-end-y': `${flyToCart.offsetY}px`,
+            '--fly-mid-x': `${flyToCart.midX}px`,
+            '--fly-mid-y': `${flyToCart.midY}px`,
+          }}
+        >
+          <img src="/logo.png" alt="" />
+        </div>
+      )}
 
       <div className={`pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 transition-opacity duration-300 ${toast.visible ? 'opacity-100' : 'opacity-0'}`}>
         <div className="pointer-events-auto max-w-md rounded-3xl border border-[#4091c9]/15 bg-white/95 px-5 py-4 shadow-xl shadow-slate-900/10 backdrop-blur-sm">
