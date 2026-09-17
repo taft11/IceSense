@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Clock3, PackageCheck, ReceiptText, Truck } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ReceiptText, Truck } from 'lucide-react';
 
 const STATUS_BADGE_STYLES = {
   Placed: 'bg-amber-100 text-amber-800',
@@ -15,6 +15,8 @@ const FILTER_OPTIONS = [
   { id: 'active', label: 'Active' },
   { id: 'completed', label: 'Completed' },
 ];
+
+const ORDERS_PER_PAGE = 5;
 
 const isOrderActive = (status) => !['Delivered', 'Cancelled'].includes(status || 'Placed');
 
@@ -44,7 +46,9 @@ const getItemImage = (item) => {
 
 export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder }) {
   const [activeFilter, setActiveFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [expandedItemsOrderId, setExpandedItemsOrderId] = useState(null);
 
   const filteredOrders = useMemo(() => {
     if (activeFilter === 'active') {
@@ -57,6 +61,20 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
 
     return orders;
   }, [activeFilter, orders]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedOrders = filteredOrders.slice(
+    (safePage - 1) * ORDERS_PER_PAGE,
+    safePage * ORDERS_PER_PAGE
+  );
+
+  const handleFilterChange = (filterId) => {
+    setActiveFilter(filterId);
+    setCurrentPage(1);
+    setExpandedOrderId(null);
+    setExpandedItemsOrderId(null);
+  };
 
   return (
     <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
@@ -75,7 +93,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveFilter(tab.id)}
+            onClick={() => handleFilterChange(tab.id)}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
               activeFilter === tab.id
                 ? 'bg-[#4091c9] text-white'
@@ -104,7 +122,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredOrders.map((order) => {
+          {paginatedOrders.map((order) => {
             const displayStatus = order.status || 'Placed';
             const orderDate = formatDate(order.createdAt);
             const deliveryDate = formatReadableDate(order.deliveryDate);
@@ -153,7 +171,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                   </div>
 
                   <div className="mt-4 divide-y divide-slate-100 rounded-2xl bg-slate-50">
-                    {(order.items || []).map((item, index) => {
+                    {(expandedItemsOrderId === order.id ? order.items || [] : (order.items || []).slice(0, 2)).map((item, index) => {
                       const itemImage = getItemImage(item);
                       return (
                         <div
@@ -182,6 +200,20 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                         </div>
                       );
                     })}
+                    {(order.items || []).length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedItemsOrderId((prev) => (prev === order.id ? null : order.id))}
+                        className="flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-[#4091c9] transition hover:text-[#2d75aa]"
+                      >
+                        {expandedItemsOrderId === order.id
+                          ? 'Show fewer items'
+                          : `+ ${(order.items || []).length - 2} more items`}
+                        <ChevronDown
+                          className={`h-4 w-4 transition ${expandedItemsOrderId === order.id ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -229,6 +261,34 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
               </div>
             );
           })}
+
+          {filteredOrders.length > ORDERS_PER_PAGE && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm text-slate-500">
+                Page {safePage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safePage === 1}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safePage === totalPages}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

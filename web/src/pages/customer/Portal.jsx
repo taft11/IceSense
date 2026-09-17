@@ -186,6 +186,7 @@ export default function CustomerPortal() {
     'tube-50': 124,
     'crushed-crate': 15,
     'crushed-sack': 60,
+    'crushed-50': 60,
   });
 
   const [selectedIceType, setSelectedIceType] = useState('tube');
