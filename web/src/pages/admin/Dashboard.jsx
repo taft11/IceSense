@@ -359,17 +359,22 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
 
+    document.body.style.overflow = 'hidden';
+
     const handleEscape = (event) => {
       if (event.key === 'Escape') setMobileMenuOpen(false);
     };
 
     document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [mobileMenuOpen]);
 
   return (
     <div className="flex min-h-screen bg-[#f8f9fa] font-sans text-gray-800">
-      <header className="admin-mobile-header flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:hidden">
+      <header className="admin-mobile-header z-[70] flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:hidden">
         <h2 className="text-xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
         <button
           type="button"
@@ -387,11 +392,11 @@ export default function AdminDashboard() {
           type="button"
           aria-label="Close admin navigation"
           onClick={() => setMobileMenuOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-900/30 md:hidden"
+          className="fixed inset-0 z-[60] bg-slate-900/30 md:hidden"
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-gray-200 bg-white p-6 shadow-xl transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[80] flex w-[min(18rem,calc(100vw-1rem))] flex-col border-r border-gray-200 bg-white p-6 shadow-xl transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="mb-8 flex items-center justify-between">
           <h2 className="text-2xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
           <button type="button" aria-label="Close admin navigation" onClick={() => setMobileMenuOpen(false)} className="rounded-xl p-2 text-gray-500 hover:bg-slate-50">
