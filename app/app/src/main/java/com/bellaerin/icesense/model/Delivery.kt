@@ -11,5 +11,6 @@ data class Delivery(
     val proofImageUrl: String? = null,
     val deliverySlot: String? = null,
     val phoneNumber: String? = null,
-    val contactNumber: String? = null
+    val contactNumber: String? = null,
+    val deliveredAt: Long? = null
 )

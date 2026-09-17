@@ -62,7 +62,7 @@ import kotlin.math.roundToInt
 fun DeliveryListScreen(
     deliveries: List<Delivery>,
     onConfirm: (String, String?) -> Unit,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -74,8 +74,8 @@ fun DeliveryListScreen(
         mutableStateOf(
             ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED,
         )
     }
 
@@ -83,8 +83,8 @@ fun DeliveryListScreen(
         mutableStateOf(
             ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
+                Manifest.permission.CAMERA,
+            ) == PackageManager.PERMISSION_GRANTED,
         )
     }
 
@@ -92,9 +92,9 @@ fun DeliveryListScreen(
     var currentDeliveryId by remember { mutableStateOf<String?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
+        ActivityResultContracts.TakePicture(),
     ) { success ->
-        if (success && tempPhotoUri != null && currentDeliveryId != null) {
+        if (success && (tempPhotoUri != null) && (currentDeliveryId != null)) {
             onConfirm(currentDeliveryId!!, tempPhotoUri.toString())
             Toast.makeText(context, "Delivery confirmed with proof", Toast.LENGTH_SHORT).show()
         }
@@ -104,7 +104,7 @@ fun DeliveryListScreen(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasCameraPermission = isGranted
-        if (isGranted && currentDeliveryId != null) {
+        if (isGranted && (currentDeliveryId != null)) {
             val uri = createImageUri(context)
             tempPhotoUri = uri
             cameraLauncher.launch(uri)
@@ -241,7 +241,7 @@ fun DeliveryListScreen(
             }
         } else {
             Column {
-                if (!hasLocationPermission && selectedTabIndex == 0) {
+                if ((!hasLocationPermission) && (selectedTabIndex == 0)) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -289,7 +289,7 @@ fun DeliveryListScreen(
                                                 }
                                             }
                                         },
-                                        onPermissionRequest = { permissionLauncher.launch(it) }
+                                        onPermissionRequest = permissionLauncher::launch
                                     )
                                 }
                             }
@@ -317,7 +317,7 @@ fun DeliveryListScreen(
                                             }
                                         }
                                     },
-                                    onPermissionRequest = { permissionLauncher.launch(it) }
+                                    onPermissionRequest = permissionLauncher::launch
                                 )
                             }
                         }
@@ -328,7 +328,7 @@ fun DeliveryListScreen(
                                 hasLocationPermission = hasLocationPermission,
                                 onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
                                 onConfirmRequest = { /* Not needed for delivered */ },
-                                onPermissionRequest = { permissionLauncher.launch(it) }
+                                onPermissionRequest = permissionLauncher::launch
                             )
                         }
                     }
@@ -386,10 +386,10 @@ fun DeliveryCardItem(
     onPermissionRequest: (String) -> Unit
 ) {
     val context = LocalContext.current
-    var showConfirmDialog by remember { mutableStateOf(false) }
-    var showImagePreview by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(value = false) }
+    var showImagePreview by remember { mutableStateOf(value = false) }
 
-    if (showImagePreview && delivery.proofImageUrl != null) {
+    if ((showImagePreview) && (delivery.proofImageUrl != null)) {
         Dialog(onDismissRequest = { showImagePreview = false }) {
             Box(
                 modifier = Modifier
@@ -616,20 +616,32 @@ fun DeliveryCardItem(
                     }
                     
                     // Status Badge
-                    Surface(
-                        color = if (delivery.isConfirmed) 
-                            Color(0xFFE8F5E9) 
-                        else 
-                            Color(0xFFFFF3E0),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = if (delivery.isConfirmed) "Delivered" else "Pending",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (delivery.isConfirmed) Color(0xFF2E7D32) else Color(0xFFE65100)
-                        )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Surface(
+                            color = if (delivery.isConfirmed) 
+                                Color(0xFFE8F5E9) 
+                            else 
+                                Color(0xFFFFF3E0),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = if (delivery.isConfirmed) "Delivered" else "Pending",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (delivery.isConfirmed) Color(0xFF2E7D32) else Color(0xFFE65100)
+                            )
+                        }
+                        
+                        if ((delivery.isConfirmed) && (delivery.deliveredAt != null)) {
+                            val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(delivery.deliveredAt))
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(top = 4.dp, end = 4.dp)
+                            )
+                        }
                     }
                 }
 
@@ -705,13 +717,10 @@ fun DeliveryCardItem(
                                 Text("Route")
                             }
                             
-                            SwipeToConfirmButton(
-                                modifier = Modifier.weight(2f),
-                                onConfirmed = {
-                                    if (hasLocationPermission) showConfirmDialog = true
-                                    else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
-                                }
-                            )
+                            SwipeToConfirmButton(modifier = Modifier.weight(2f)) {
+                                if (hasLocationPermission) showConfirmDialog = true
+                                else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
                         }
                     }
                 }
@@ -719,6 +728,8 @@ fun DeliveryCardItem(
         }
     }
 }
+
+
 
 @Composable
 fun SwipeToConfirmButton(

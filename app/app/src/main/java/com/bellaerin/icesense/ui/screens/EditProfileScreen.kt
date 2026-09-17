@@ -18,11 +18,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 fun EditProfileScreen(
     uid: String,
     currentName: String,
+    currentContactNumber: String,
     userEmail: String,
-    onProfileUpdated: (String) -> Unit,
+    onProfileUpdated: (String, String) -> Unit,
     onBack: () -> Unit
 ) {
     var name by remember { mutableStateOf(currentName) }
+    var contactNumber by remember { mutableStateOf(currentContactNumber) }
     var isSaving by remember { mutableStateOf(false) }
     val context = LocalContext.current
     
@@ -63,6 +65,16 @@ fun EditProfileScreen(
             )
             
             Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = contactNumber,
+                onValueChange = { contactNumber = it },
+                label = { Text("Contact Number") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             OutlinedTextField(
                 value = userEmail,
@@ -82,11 +94,15 @@ fun EditProfileScreen(
                     }
                     isSaving = true
                     val firestore = FirebaseFirestore.getInstance()
+                    val updates = mapOf(
+                        "name" to name,
+                        "contactNumber" to contactNumber
+                    )
                     firestore.collection("users").document(uid)
-                        .update("name", name)
+                        .update(updates)
                         .addOnSuccessListener {
                             isSaving = false
-                            onProfileUpdated(name)
+                            onProfileUpdated(name, contactNumber)
                             Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
                             onBack()
                         }
