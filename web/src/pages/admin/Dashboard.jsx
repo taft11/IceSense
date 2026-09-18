@@ -373,9 +373,8 @@ export default function AdminDashboard() {
   }, [mobileMenuOpen]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8f9fa] font-sans text-gray-800">
-      <header className="admin-mobile-header z-[70] flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:hidden">
-        <h2 className="text-xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
+  <div className="flex min-h-screen bg-[#f8f9fa] font-sans text-gray-800">
+      <header className="admin-mobile-header flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:hidden">
         <button
           type="button"
           aria-label={mobileMenuOpen ? 'Close admin navigation' : 'Open admin navigation'}
@@ -385,6 +384,7 @@ export default function AdminDashboard() {
         >
           <Menu className="h-6 w-6" />
         </button>
+        <h2 className="text-xl font-black tracking-tighter text-gray-900">Bella Erin<span className="text-[#4091c9]">.</span></h2>
       </header>
 
       {mobileMenuOpen && (
