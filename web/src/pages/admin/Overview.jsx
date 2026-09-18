@@ -24,13 +24,11 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function Overview({ iotData, todayDate }) {
+export default function Overview({ iotData, todayDate, todaysOrdersCount = 0 }) {
   const navigate = useNavigate();
   const { forecastDays = [], loading } = useDemandForecast();
   const tomorrowDemandKg = 780;
-  const dailyTargetKg = 100;
-  const stockProducedKg = Number(iotData?.stockProducedKg || 0);
-  const productionTargetPercent = stockProducedKg > 0 ? Math.round((stockProducedKg / dailyTargetKg) * 100) : 0;
+  const currentStockKg = Number(iotData?.stockProducedKg || 0);
 
   // Water tank calibration constants
   const TANK_TOTAL_HEIGHT = 43; // cm
@@ -123,31 +121,31 @@ export default function Overview({ iotData, todayDate }) {
 
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Total Stock Produced</h3>
-            <span className="rounded-full border border-emerald-200/60 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">+12%</span>
+            <h3 className="text-sm font-semibold text-slate-700">Total Stock on Hand</h3>
+            <span className="rounded-full border border-emerald-200/60 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">LIVE</span>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-slate-900">{stockProducedKg.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-slate-900">{currentStockKg.toLocaleString()}</p>
               <span className="text-sm text-slate-500">kg</span>
             </div>
-            <p className="mt-3 text-sm text-slate-500">🟢 {productionTargetPercent}% of daily target ({dailyTargetKg} kg)</p>
+            <p className="mt-3 text-sm text-slate-500">Current inventory available in the facility.</p>
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Active Deliveries</h3>
+            <h3 className="text-sm font-semibold text-slate-700">Total Orders Today</h3>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> LIVE
             </span>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-slate-900">{iotData.activeTrucks}</p>
-              <span className="text-sm text-slate-500">On Route</span>
+              <p className="text-3xl font-bold text-slate-900">{todaysOrdersCount}</p>
+              <span className="text-sm text-slate-500">Orders</span>
             </div>
-            <p className="mt-3 text-sm text-slate-500">2 Scheduled • 1 In Transit</p>
+            <p className="mt-3 text-sm text-slate-500">Orders scheduled for today.</p>
           </div>
         </div>
       </div>

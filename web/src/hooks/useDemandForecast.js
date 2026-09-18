@@ -51,20 +51,23 @@ const normalizeForecastData = (data = {}) => ({
   },
 });
 
-const findForecastWindowLastYear = async (baseDate, dayCount = 7) => {
-  const startDate = addDays(baseDate, -364);
-  const requestedDates = Array.from({ length: dayCount }, (_, index) => addDays(startDate, index));
+const findForecastWindow = async (baseDate, dayCount = 7) => {
+  const startDate = new Date(baseDate);
+  const displayDates = Array.from({ length: dayCount }, (_, index) => addDays(startDate, index));
+  const dataDates = displayDates.map((date) => addDays(date, -364));
 
   return Promise.all(
-    requestedDates.map(async (date, index) => {
-      const dateKey = formatDateKey(date);
-      const snapshot = await getDoc(doc(db, 'daily_analytics', dateKey));
+    dataDates.map(async (dataDate, index) => {
+      const displayDate = displayDates[index];
+      const displayDateKey = formatDateKey(displayDate);
+      const dataDateKey = formatDateKey(dataDate);
+      const snapshot = await getDoc(doc(db, 'daily_analytics', dataDateKey));
 
       if (!snapshot.exists()) {
         return {
-          date: dateKey,
-          label: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          ...getFallbackForecast(dateKey, index),
+          date: displayDateKey,
+          label: displayDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          ...getFallbackForecast(displayDateKey, index),
         };
       }
 
@@ -72,10 +75,10 @@ const findForecastWindowLastYear = async (baseDate, dayCount = 7) => {
       const normalized = normalizeForecastData(docData);
       const label = docData.day_of_week
         ? String(docData.day_of_week).slice(0, 3)
-        : date.toLocaleDateString('en-US', { weekday: 'short' });
+        : displayDate.toLocaleDateString('en-US', { weekday: 'short' });
 
       return {
-        date: dateKey,
+        date: displayDateKey,
         label,
         ...normalized,
       };
@@ -96,7 +99,7 @@ export default function useDemandForecast() {
       setError('');
 
       try {
-        const results = await findForecastWindowLastYear(new Date(), 7);
+        const results = await findForecastWindow(new Date(), 7);
 
         if (!isMounted) return;
         setForecastDays(results);
@@ -110,7 +113,7 @@ export default function useDemandForecast() {
           setError('Unable to load demand forecast right now.');
         }
 
-        const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), -364 + index));
+        const requestedDates = Array.from({ length: 7 }, (_, index) => addDays(new Date(), index));
         const dateKeys = requestedDates.map((date) => formatDateKey(date));
 
         setForecastDays(dateKeys.map((dateKey, index) => ({

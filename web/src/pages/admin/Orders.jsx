@@ -148,6 +148,15 @@ export default function Orders({
     return { label: 'Delivery', className: 'bg-sky-100 text-sky-700' };
   };
 
+  const formatOrderItemLabel = (item) => {
+    const quantity = Number(item?.quantity || 0);
+    const productName = item?.name || item?.productName || 'Ice item';
+    const weightLabel = item?.weightKg ? `${item.weightKg}kg ` : '';
+    const normalizedName = productName.includes(weightLabel.trim()) ? productName : `${weightLabel}${productName}`;
+
+    return `${normalizedName} × ${quantity}`;
+  };
+
   const isPendingVerification = (order) => {
     const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
     const deliveryDate = order?.deliveryDate ? new Date(`${order.deliveryDate}T00:00:00`) : null;
@@ -383,11 +392,14 @@ export default function Orders({
                             <p className="text-xs text-gray-500">{order.customerEmail || 'No email'}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               {(order.items || []).map((item, index) => (
-                                <p key={`${order.id}-${index}`} className="text-gray-700">
-                                  {item.name} × {item.quantity}
-                                </p>
+                                <div
+                                  key={`${order.id}-${index}`}
+                                  className="rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-left leading-snug text-gray-700"
+                                >
+                                  <span className="font-medium text-gray-800">{formatOrderItemLabel(item)}</span>
+                                </div>
                               ))}
                             </div>
                           </td>

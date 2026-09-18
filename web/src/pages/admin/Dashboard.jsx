@@ -60,6 +60,24 @@ export default function AdminDashboard() {
     return date.toLocaleString();
   };
 
+  const toLocalDateKey = (value) => {
+    if (!value) return null;
+
+    const date = typeof value?.toDate === 'function'
+      ? value.toDate()
+      : value instanceof Date
+        ? value
+        : new Date(value);
+
+    if (Number.isNaN(date.getTime())) return null;
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  };
+
   const getOrderStatusKey = (order) => {
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
@@ -107,7 +125,7 @@ export default function AdminDashboard() {
     if (order?.deliveryDate) {
       const scheduledDate = new Date(`${order.deliveryDate}T00:00:00`);
       if (!Number.isNaN(scheduledDate.getTime())) {
-        return scheduledDate.toISOString().split('T')[0];
+        return toLocalDateKey(scheduledDate);
       }
     }
 
@@ -123,7 +141,7 @@ export default function AdminDashboard() {
       return null;
     }
 
-    return createdAt.toISOString().split('T')[0];
+    return toLocalDateKey(createdAt);
   };
 
   const getOrderScheduleTimestamp = (order) => {
@@ -163,6 +181,11 @@ export default function AdminDashboard() {
   const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
   const completedOrders = processingOrders + deliveredOrders;
   const unassignedDeliveries = allOrders.filter((order) => !order.assignedDriverId).length;
+  const todaysOrdersCount = allOrders.filter((order) => {
+    const orderDate = getOrderDateValue(order) || (order?.createdAt ? toLocalDateKey(order.createdAt?.toDate?.() || order.createdAt) : null);
+    const todayDateKey = toLocalDateKey(new Date());
+    return orderDate === todayDateKey;
+  }).length;
 
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
@@ -189,22 +212,29 @@ export default function AdminDashboard() {
 
     const unsubscribeInventory = onValue(inventoryRef, (snapshot) => {
       const value = snapshot.val();
-      const breakdown = value?.sacks_breakdown || {};
-      const totalSacks = Number(value?.total_sacks_count ?? 0);
-      const breakdownTotalKg = [
-        { key: '35kg_sacks', weight: 35 },
-        { key: '50kg_sacks', weight: 50 },
-        { key: '5kg_sacks', weight: 5 },
-      ].reduce((sum, item) => {
-        const count = Number(breakdown?.[item.key] ?? 0);
-        return sum + count * item.weight;
-      }, 0);
+      const scaleSections = {
+        tube: value?.tube_ice || {},
+        crushed: value?.crushed_ice || {},
+      };
 
-      const stockProducedKg = breakdownTotalKg > 0 ? breakdownTotalKg : totalSacks > 0 ? totalSacks : 0;
+      const totalKg = ['tube', 'crushed'].reduce((sum, type) => {
+        const section = scaleSections[type] || {};
+        const breakdown = section.sacks_breakdown || {};
+        const weights = [
+          { key: '5kg_sacks', weight: 5 },
+          { key: '35kg_sacks', weight: 35 },
+          { key: '50kg_sacks', weight: 50 },
+        ];
+
+        return sum + weights.reduce((sectionSum, item) => {
+          const count = Number(breakdown?.[item.key] ?? 0);
+          return sectionSum + (count * item.weight);
+        }, 0);
+      }, 0);
 
       setIotData((prev) => ({
         ...prev,
-        stockProducedKg,
+        stockProducedKg: totalKg,
       }));
     });
 
@@ -406,10 +436,10 @@ export default function AdminDashboard() {
         <nav className="flex-1">
           <ul className="space-y-1.5">
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/overview" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'overview' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Overview</Link></li>
-            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
-            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Orders</span><span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{pendingOrders || 3}</span></Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Deliveries</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
           </ul>
         </nav>
         <button onClick={handleSignOut} className="w-full rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Sign out</button>
@@ -430,16 +460,6 @@ export default function AdminDashboard() {
               </Link>
             </li>
             <li>
-              <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Predictive Analysis</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/inventory" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Inventory</span>
-              </Link>
-            </li>
-            <li>
               <Link to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <span>Orders</span>
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
@@ -453,6 +473,16 @@ export default function AdminDashboard() {
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                   {unassignedDeliveries}
                 </span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/inventory" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Inventory</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/forecast" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
+                <span>Predictive Analysis</span>
               </Link>
             </li>
           </ul>
@@ -469,8 +499,8 @@ export default function AdminDashboard() {
       <main className="admin-main ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
         <div className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6">
           <Routes>
-            <Route index element={<Overview iotData={iotData} todayDate={todayDate} />} />
-            <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} />} />
+            <Route index element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} />} />
+            <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} />} />
             <Route
               path="orders"
               element={
