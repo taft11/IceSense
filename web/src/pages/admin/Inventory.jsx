@@ -2,7 +2,7 @@ import { getApp } from 'firebase/app';
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, ShieldCheck, TrendingUp } from 'lucide-react';
 import { addDoc, collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { getDatabase, onValue, ref } from 'firebase/database';
+import { getDatabase, onValue, ref, update } from 'firebase/database';
 import { auth, db } from '../../services/firebase';
 
 const realtimeDb = getDatabase(getApp());
@@ -346,7 +346,19 @@ export default function Inventory() {
     const performedBy = auth.currentUser?.uid || 'ESP32_Scale_01';
 
     if (selectedItem.isMonitoredByScale) {
-      // Scale-monitored items stay driven by RTDB telemetry; manual changes are logged as overrides only.
+      const scaleSectionKey = selectedItem.type === 'tube' ? 'tube_ice' : 'crushed_ice';
+      const scaleSection = scaleInventory?.[scaleSectionKey] || {};
+      const sacksBreakdown = { ...(scaleSection.sacks_breakdown || {}) };
+      const sackKey = `${Number(selectedItem.weightPerUnitKg || 0)}kg_sacks`;
+      sacksBreakdown[sackKey] = nextStock;
+      const totalSacks = Object.values(sacksBreakdown).reduce((sum, value) => sum + Number(value || 0), 0);
+
+      await update(ref(realtimeDb, `inventory/scale_1/${scaleSectionKey}`), {
+        [`sacks_breakdown/${sackKey}`]: nextStock,
+        total_sacks: totalSacks,
+        last_updated: new Date().toISOString(),
+      });
+
       await addDoc(collection(db, 'stock_logs'), {
         productId: selectedItem.id,
         changeQuantity: changeAmount,
