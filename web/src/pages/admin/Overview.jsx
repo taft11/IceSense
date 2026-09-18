@@ -1,4 +1,5 @@
-import { Calendar, Activity, Bell, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar, ClipboardList, CreditCard, Eye, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import useDemandForecast from '../../hooks/useDemandForecast';
@@ -24,11 +25,20 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function Overview({ iotData, todayDate, todaysOrdersCount = 0 }) {
+export default function Overview({
+  iotData,
+  todayDate,
+  todaysOrdersCount = 0,
+  pendingOrders = [],
+  verificationLoadingId,
+  onApprovePayment,
+  onOpenReceiptPreview,
+  onOpenRejectModal,
+}) {
   const navigate = useNavigate();
   const { forecastDays = [], loading } = useDemandForecast();
-  const tomorrowDemandKg = 780;
   const currentStockKg = Number(iotData?.stockProducedKg || 0);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   // Water tank calibration constants
   const TANK_TOTAL_HEIGHT = 43; // cm
@@ -71,6 +81,19 @@ export default function Overview({ iotData, todayDate, todaysOrdersCount = 0 }) 
     'Historical Production': Math.round(day.total_kg_produced || 0),
     'Predicted Demand': Math.round(day.total_kg_demanded || 0),
   }));
+
+  const getReceiptPreviewUrl = (order) => order?.receiptUrl || order?.paymentReceiptUrl || order?.paymentProofUrl || order?.proofImageUrl || order?.proofUrl || null;
+  const getPaymentMethodLabel = (order) => {
+    const value = String(order?.paymentMethod || order?.paymentType || '').trim();
+    return value ? value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'Unspecified';
+  };
+  const formatOrderItemLabel = (item) => {
+    const quantity = Number(item?.quantity || 0);
+    const productName = item?.name || item?.productName || 'Ice item';
+    const weightLabel = item?.weightKg ? `${item.weightKg}kg ` : '';
+    const normalizedName = productName.includes(weightLabel.trim()) ? productName : `${weightLabel}${productName}`;
+    return `${normalizedName} × ${quantity}`;
+  };
 
   return (
     <div className="animate-fade-in overview-page">
@@ -202,52 +225,66 @@ export default function Overview({ iotData, todayDate, todaysOrdersCount = 0 }) 
         </div>
 
         <div className="flex flex-col gap-6 lg:col-span-1">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#4091c9] to-[#205a82] p-8 text-white shadow-lg">
-            <div className="absolute -right-4 -top-4 opacity-10">
-              <Activity className="h-32 w-32" />
-            </div>
-            <div className="relative z-10">
-              <div className="mb-4 inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-md border border-white/10">
-                📈 Demand Advisory
-              </div>
-              <h3 className="mb-2 text-xl font-bold">Demand Spike Alert</h3>
-              <p className="mb-2 text-sm text-blue-100 leading-relaxed">
-                Tomorrow&apos;s demand is forecast at <strong className="text-white">{tomorrowDemandKg} kg</strong>.
-              </p>
-              <p className="mb-6 text-sm text-blue-100 leading-relaxed">
-                A strong increase is expected due to weather and weekend activity patterns.
-              </p>
-              <button
-                onClick={() => navigate('/admin/forecast')}
-                className="w-full rounded-xl bg-white text-[#205a82] py-3 text-sm font-bold shadow-md hover:bg-gray-50 transition-colors"
-              >
-                View Full Forecast →
-              </button>
-            </div>
-          </div>
-
           <div className="flex-1 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 flex items-center text-lg font-bold text-gray-900">
-              <Bell className="mr-2 h-5 w-5 text-gray-400" /> Recent Alerts
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 border border-red-100">
-                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-bold text-red-800">Freezer Warning</p>
-                  <p className="text-xs text-red-600 mt-1">Temperature has risen above -5°C. Check door seals.</p>
-                </div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center text-lg font-bold text-gray-900">
+                  <ClipboardList className="mr-2 h-5 w-5 text-[#4091c9]" /> Dispatch Queue
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">Incoming orders waiting for payment approval.</p>
               </div>
-
-              <div className="flex items-start gap-3 rounded-2xl bg-gray-50 p-4 border border-gray-100">
-                <div className="h-2 w-2 mt-1.5 rounded-full bg-blue-500 shrink-0"></div>
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Target Reached</p>
-                  <p className="text-xs text-gray-500 mt-1">Production hit daily goal of 100 sacks.</p>
-                  <p className="text-[10px] text-gray-400 mt-2 font-semibold uppercase">2 hours ago</p>
-                </div>
-              </div>
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{pendingOrders.length} pending</span>
             </div>
+
+            <div className="mt-5 space-y-3">
+              {pendingOrders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm text-gray-500">
+                  No orders waiting for approval.
+                </div>
+              ) : pendingOrders.slice(0, 4).map((order) => {
+                const isExpanded = expandedOrderId === order.id;
+                const isBusy = verificationLoadingId === order.id;
+                const receiptUrl = getReceiptPreviewUrl(order);
+
+                return (
+                  <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-900">#{order.id?.slice(0, 8).toUpperCase()} · {order.customerName || 'Unknown customer'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{(order.items || []).length} item{(order.items || []).length === 1 ? '' : 's'} · ₱{Number(order.total || 0).toFixed(2)}</p>
+                      </div>
+                      <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)} className="shrink-0 text-xs font-semibold text-[#2d75aa] hover:underline">
+                        {isExpanded ? 'Hide details' : 'View details'}
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
+                        <p className="font-semibold text-slate-800">Ordered items</p>
+                        {(order.items || []).map((item, index) => <p key={`${order.id}-item-${index}`}>{formatOrderItemLabel(item)}</p>)}
+                        <div className="flex items-center gap-2 pt-1 font-medium">
+                          <CreditCard className="h-3.5 w-3.5 text-[#4091c9]" />
+                          <span>{getPaymentMethodLabel(order)} · Payment verification required</span>
+                        </div>
+                        {receiptUrl ? (
+                          <button type="button" onClick={() => onOpenReceiptPreview(receiptUrl)} className="inline-flex items-center gap-1 font-semibold text-[#2d75aa] hover:underline">
+                            <Eye className="h-3.5 w-3.5" /> View payment proof
+                          </button>
+                        ) : <p className="text-amber-700">No payment proof uploaded.</p>}
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" disabled={isBusy} onClick={() => onApprovePayment(order)} className="rounded-xl bg-[#4091c9] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:opacity-50">{isBusy ? 'Updating...' : 'Approve'}</button>
+                      <button type="button" disabled={isBusy} onClick={() => onOpenRejectModal(order)} className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-3.5 w-3.5" /> Reject</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {pendingOrders.length > 4 && <p className="mt-4 text-center text-xs text-slate-500">Showing 4 of {pendingOrders.length} pending orders.</p>}
+            <button type="button" onClick={() => navigate('/admin/orders')} className="mt-5 w-full rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-[#2d75aa] transition hover:bg-sky-50">View all orders</button>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, TrendingUp } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -176,6 +176,7 @@ export default function AdminDashboard() {
   const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
   const paginatedOrders = filteredOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
   const pendingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment').length;
+  const pendingOrderItems = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment');
   const processingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'processing').length;
   const deliveredOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'delivered').length;
   const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
@@ -499,8 +500,8 @@ export default function AdminDashboard() {
       <main className="admin-main ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
         <div className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6">
           <Routes>
-            <Route index element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} />} />
-            <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} />} />
+            <Route index element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
+            <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
             <Route
               path="orders"
               element={
