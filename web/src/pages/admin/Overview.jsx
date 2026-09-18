@@ -229,19 +229,19 @@ export default function Overview({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="flex items-center text-lg font-bold text-gray-900">
-                  <ClipboardList className="mr-2 h-5 w-5 text-[#4091c9]" /> Dispatch Queue
+                  <ClipboardList className="mr-2 h-5 w-5 text-[#4091c9]" /> Approve Orders
                 </h3>
                 <p className="mt-1 text-xs text-gray-500">Incoming orders waiting for payment approval.</p>
               </div>
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{pendingOrders.length} pending</span>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
               {pendingOrders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm text-gray-500">
                   No orders waiting for approval.
                 </div>
-              ) : pendingOrders.slice(0, 4).map((order) => {
+              ) : pendingOrders.map((order) => {
                 const isExpanded = expandedOrderId === order.id;
                 const isBusy = verificationLoadingId === order.id;
                 const receiptUrl = getReceiptPreviewUrl(order);
@@ -283,7 +283,6 @@ export default function Overview({
               })}
             </div>
 
-            {pendingOrders.length > 4 && <p className="mt-4 text-center text-xs text-slate-500">Showing 4 of {pendingOrders.length} pending orders.</p>}
             <button type="button" onClick={() => navigate('/admin/orders')} className="mt-5 w-full rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-[#2d75aa] transition hover:bg-sky-50">View all orders</button>
           </div>
         </div>
