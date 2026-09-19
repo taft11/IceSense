@@ -392,15 +392,22 @@ export default function Orders({
                             <p className="text-xs text-gray-500">{order.customerEmail || 'No email'}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="space-y-1.5">
-                              {(order.items || []).map((item, index) => (
-                                <div
-                                  key={`${order.id}-${index}`}
-                                  className="rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-left leading-snug text-gray-700"
-                                >
-                                  <span className="font-medium text-gray-800">{formatOrderItemLabel(item)}</span>
-                                </div>
-                              ))}
+                            <div className="min-w-[170px] max-w-[220px]">
+                              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                {(order.items || []).length} item{(order.items || []).length === 1 ? '' : 's'}
+                              </p>
+                              <div className="space-y-1 text-left">
+                                {(order.items || []).slice(0, 2).map((item, index) => (
+                                  <p key={`${order.id}-${index}`} className="truncate text-sm font-medium text-slate-700" title={formatOrderItemLabel(item)}>
+                                    {formatOrderItemLabel(item)}
+                                  </p>
+                                ))}
+                                {(order.items || []).length > 2 && (
+                                  <p className="text-xs font-medium text-slate-400">
+                                    +{order.items.length - 2} more
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-3">
@@ -457,7 +464,7 @@ export default function Orders({
                         {expandedOrderId === order.id && !isPendingVerification(order) && (
                           <tr>
                             <td colSpan="7" className="px-4 pb-4">
-                              <div className="grid grid-cols-1 gap-6 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                              <div className="grid grid-cols-1 gap-6 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
                                 <div>
                                   <p className="font-semibold text-slate-800">Customer Details</p>
                                   <p className="mt-2 text-sm text-slate-600">{order.customerName || 'Unknown customer'}</p>
@@ -471,6 +478,15 @@ export default function Orders({
                                   <p className="text-sm text-slate-600">Fulfillment: {fullfillmentBadge.label}</p>
                                   <p className="text-sm text-slate-600">Total weight: {getTotalWeightKg(order).toFixed(2)} kg</p>
                                   <p className="mt-2 text-xs text-slate-500">Total amount: ₱{Number(order.total || 0).toFixed(2)}</p>
+                                </div>
+
+                                <div>
+                                  <p className="font-semibold text-slate-800">Items</p>
+                                  <div className="mt-2 space-y-1 text-sm text-slate-600">
+                                    {(order.items || []).map((item, index) => (
+                                      <p key={`${order.id}-detail-item-${index}`}>{formatOrderItemLabel(item)}</p>
+                                    ))}
+                                  </div>
                                 </div>
 
                                 <div>

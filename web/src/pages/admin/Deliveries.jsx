@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { createUserWithEmailAndPassword, deleteUser, getAuth, signOut } from 'firebase/auth';
 import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { db } from '../../services/firebase';
 
 const driverAccountApp = getApps().find((app) => app.name === 'driver-account-creation')
@@ -14,6 +14,35 @@ const FILTERS = {
   all: 'All orders',
   unassigned: 'Unassigned',
   assigned: 'Assigned',
+};
+
+const PHONE_NUMBER_PATTERN = /^09\d{9}$/;
+const PASSWORD_REQUIREMENTS = [
+  { label: 'At least 8 characters', test: (value) => value.length >= 8 },
+  { label: '1 uppercase letter', test: (value) => /[A-Z]/.test(value) },
+  { label: '1 lowercase letter', test: (value) => /[a-z]/.test(value) },
+  { label: '1 number', test: (value) => /\d/.test(value) },
+  { label: '1 special character', test: (value) => /[^A-Za-z0-9]/.test(value) },
+];
+
+const getDriverValidationErrors = ({ fullName, email, contactNumber, password }, isEditing) => {
+  const errors = [];
+
+  if (!fullName.trim()) errors.push('Full name is required.');
+  if (!email.trim()) errors.push('Email is required.');
+  if (!PHONE_NUMBER_PATTERN.test(contactNumber)) {
+    errors.push('Phone number must start with 09 and contain exactly 11 digits.');
+  }
+
+  if (!isEditing && !password) {
+    errors.push('Password is required when creating a driver account.');
+  }
+
+  if (password && PASSWORD_REQUIREMENTS.some(({ test }) => !test(password))) {
+    errors.push('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.');
+  }
+
+  return errors;
 };
 
 export default function Deliveries() {
@@ -29,7 +58,10 @@ export default function Deliveries() {
   const [activeDateFilter, setActiveDateFilter] = useState('');
   const [confirmAssignment, setConfirmAssignment] = useState(null);
   const [confirmDriverDelete, setConfirmDriverDelete] = useState(null);
-  const [driverForm, setDriverForm] = useState({ fullName: '', email: '', contactNumber: '', password: '' });
+  const [driverForm, setDriverForm] = useState({ fullName: '', email: '', contactNumber: '09', password: '' });
+  const [phoneValidationAttempted, setPhoneValidationAttempted] = useState(false);
+  const [phoneInputTooLong, setPhoneInputTooLong] = useState(false);
+  const [editingDriverId, setEditingDriverId] = useState(null);
   const [savingDriver, setSavingDriver] = useState(false);
   const [deletingDriverId, setDeletingDriverId] = useState(null);
   const [driverMessage, setDriverMessage] = useState('');
@@ -126,25 +158,66 @@ export default function Deliveries() {
 
   const handleDriverFormChange = (event) => {
     const { name, value } = event.target;
-    setDriverForm((current) => ({ ...current, [name]: value }));
+    if (name === 'phoneDigits') {
+      const phoneDigits = value.replace(/\D/g, '');
+      setPhoneInputTooLong(phoneDigits.length > 9);
+      if (phoneDigits.length <= 9) setPhoneValidationAttempted(false);
+      setDriverForm((current) => ({ ...current, contactNumber: `09${phoneDigits.slice(0, 9)}` }));
+      return;
+    }
+
+    const nextValue = value;
+    setDriverForm((current) => ({ ...current, [name]: nextValue }));
+  };
+
+  const getPhoneDigits = (phoneNumber) => {
+    const digits = String(phoneNumber || '').replace(/\D/g, '');
+    return digits.startsWith('09') ? digits.slice(2, 11) : '';
+  };
+
+  const formatDriverPhone = (phoneNumber) => {
+    const digits = String(phoneNumber || '').replace(/\D/g, '');
+    return PHONE_NUMBER_PATTERN.test(digits) ? `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}` : null;
   };
 
   const handleAddDriver = async (event) => {
     event.preventDefault();
+    setPhoneValidationAttempted(true);
     const fullName = driverForm.fullName.trim();
     const email = driverForm.email.trim().toLowerCase();
-    const contactNumber = driverForm.contactNumber.trim();
+    const contactNumber = driverForm.contactNumber;
     const password = driverForm.password;
+    const isEditing = Boolean(editingDriverId);
+    const validationErrors = getDriverValidationErrors({ fullName, email, contactNumber, password }, isEditing);
 
-    if (!fullName || !email || !contactNumber || !password) {
-      setDriverError('Please complete the driver name, contact number, email, and password.');
+    if (validationErrors.length > 0) {
+      setDriverError(validationErrors.join(' '));
       setDriverMessage('');
       return;
     }
 
-    if (password.length < 8) {
-      setDriverError('The password must be at least 8 characters long.');
-      setDriverMessage('');
+    if (isEditing) {
+      try {
+        setSavingDriver(true);
+        setDriverError('');
+        setDriverMessage('');
+        await updateDoc(doc(db, 'users', editingDriverId), {
+          fullName,
+          email,
+          contactNumber,
+          updatedAt: serverTimestamp(),
+        });
+        setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+        setEditingDriverId(null);
+        setPhoneValidationAttempted(false);
+        setPhoneInputTooLong(false);
+        setDriverMessage(`${fullName} was updated successfully.`);
+      } catch (err) {
+        console.error('Unable to update driver', err);
+        setDriverError('Unable to update the driver right now. Please try again.');
+      } finally {
+        setSavingDriver(false);
+      }
       return;
     }
 
@@ -166,7 +239,9 @@ export default function Deliveries() {
         updatedAt: serverTimestamp(),
       });
       await signOut(driverAuth);
-      setDriverForm({ fullName: '', email: '', contactNumber: '', password: '' });
+      setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+      setPhoneValidationAttempted(false);
+      setPhoneInputTooLong(false);
       setDriverMessage(`${fullName} was added as a driver.`);
     } catch (err) {
       console.error('Unable to add driver', err);
@@ -191,6 +266,28 @@ export default function Deliveries() {
       if (driverAuth.currentUser) await signOut(driverAuth);
       setSavingDriver(false);
     }
+  };
+
+  const startEditingDriver = (driver) => {
+    setEditingDriverId(driver.id);
+    setDriverForm({
+      fullName: driver.fullName || driver.name || driver.displayName || '',
+      email: driver.email || '',
+      contactNumber: `09${getPhoneDigits(driver.contactNumber)}`,
+      password: '',
+    });
+    setDriverError('');
+    setDriverMessage('');
+    setPhoneValidationAttempted(false);
+    setPhoneInputTooLong(false);
+  };
+
+  const cancelEditingDriver = () => {
+    setEditingDriverId(null);
+    setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+    setPhoneValidationAttempted(false);
+    setPhoneInputTooLong(false);
+    setDriverError('');
   };
 
   const handleDeleteDriver = async () => {
@@ -376,42 +473,74 @@ export default function Deliveries() {
           <span className="text-sm font-semibold text-slate-500">{drivers.length} driver{drivers.length === 1 ? '' : 's'}</span>
         </div>
 
-        {driverError && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{driverError}</div>}
-        {driverMessage && <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{driverMessage}</div>}
+        {driverError && <div role="alert" aria-live="polite" className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{driverError}</div>}
+        {driverMessage && <div role="status" aria-live="polite" className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">{driverMessage}</div>}
 
-        <form onSubmit={handleAddDriver} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
+        <form onSubmit={handleAddDriver} className="mt-5 grid gap-x-4 gap-y-4 lg:grid-cols-[1.15fr_1.15fr_1fr_1.25fr_auto] lg:items-start">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Full name</span>
-            <input name="fullName" value={driverForm.fullName} onChange={handleDriverFormChange} required placeholder="Juan Dela Cruz" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+            <input name="fullName" value={driverForm.fullName} onChange={handleDriverFormChange} required placeholder="Juan Dela Cruz" className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-[#4091c9]/15" />
           </label>
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Email</span>
-            <input type="email" name="email" value={driverForm.email} onChange={handleDriverFormChange} required placeholder="driver@example.com" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+            <input type="email" name="email" value={driverForm.email} onChange={handleDriverFormChange} required placeholder="driver@example.com" className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-[#4091c9]/15" />
           </label>
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Phone number</span>
-            <input name="contactNumber" value={driverForm.contactNumber} onChange={handleDriverFormChange} required placeholder="09171234567" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+            <div className={`mt-2 flex h-11 w-full overflow-hidden rounded-xl border bg-white transition focus-within:ring-2 focus-within:ring-[#4091c9]/15 ${((phoneValidationAttempted && driverForm.contactNumber.length !== 11) || phoneInputTooLong) ? 'border-rose-300 focus-within:border-rose-400' : 'border-gray-200 focus-within:border-[#4091c9]'}`}>
+              <span className="flex items-center border-r border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">09</span>
+              <input name="phoneDigits" value={getPhoneDigits(driverForm.contactNumber)} onChange={handleDriverFormChange} inputMode="numeric" maxLength={9} placeholder="XXXXXXXXX" aria-describedby="driver-phone-help" className="min-w-0 flex-1 bg-transparent px-3 text-sm text-slate-800 outline-none" />
+            </div>
+            {((phoneValidationAttempted && driverForm.contactNumber.length !== 11) || phoneInputTooLong) && (
+              <span id="driver-phone-help" role="alert" aria-live="polite" className="mt-1 block text-xs text-rose-600">Phone number must contain 11 digits.</span>
+            )}
           </label>
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Password</span>
-            <input type="password" name="password" value={driverForm.password} onChange={handleDriverFormChange} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#4091c9]" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Password{editingDriverId ? ' (optional)' : ''}</span>
+            <input type="password" name="password" value={driverForm.password} onChange={handleDriverFormChange} required={!editingDriverId} autoComplete="new-password" placeholder={editingDriverId ? 'Leave blank to keep current' : 'Enter a strong password'} aria-describedby="driver-password-help" className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-[#4091c9]/15" />
+            <ul id="driver-password-help" className="mt-2 space-y-1 text-xs leading-4 text-slate-500">
+              {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+                const isSatisfied = test(driverForm.password);
+                return (
+                  <li key={label} className={`flex items-center gap-1.5 ${isSatisfied ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    <span aria-hidden="true" className="w-3 text-center font-semibold">{isSatisfied ? '✓' : '○'}</span>
+                    <span>{label}</span>
+                  </li>
+                );
+              })}
+            </ul>
           </label>
-          <button type="submit" disabled={savingDriver} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#4091c9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:opacity-60">
-            <Plus className="h-4 w-4" /> {savingDriver ? 'Adding...' : 'Add Driver'}
-          </button>
+          <div className="flex h-11 gap-2 lg:mt-6">
+            <button type="submit" disabled={savingDriver || driverForm.contactNumber.length !== 11} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#4091c9] px-4 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:opacity-60">
+              {editingDriverId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {savingDriver ? 'Saving...' : editingDriverId ? 'Save changes' : 'Add Driver'}
+            </button>
+            {editingDriverId && (
+              <button type="button" onClick={cancelEditingDriver} className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2.5 text-slate-600 transition hover:bg-slate-50" aria-label="Cancel editing">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </form>
 
         {drivers.length > 0 && (
           <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left font-semibold text-gray-700">Driver</th><th className="px-4 py-3 text-left font-semibold text-gray-700">Phone</th><th className="px-4 py-3 text-right font-semibold text-gray-700">Action</th></tr></thead>
+              <thead className="bg-slate-50"><tr><th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Driver</th><th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th><th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th></tr></thead>
               <tbody className="divide-y divide-gray-200">
                 {drivers.map((driver) => {
                   const driverName = driver.fullName || driver.name || driver.displayName || driver.email || driver.id;
                   return <tr key={driver.id}>
-                    <td className="px-4 py-3"><p className="font-semibold text-gray-800">{driverName}</p><p className="text-xs text-gray-500">{driver.email || 'No email'}</p></td>
-                    <td className="px-4 py-3 text-gray-600">{driver.contactNumber || 'No phone number'}</td>
-                    <td className="px-4 py-3 text-right"><button type="button" onClick={() => setConfirmDriverDelete({ id: driver.id, name: driverName })} disabled={deletingDriverId === driver.id} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button></td>
+                    <td className="px-5 py-4"><p className="font-semibold text-slate-800">{driverName}</p><p className="mt-0.5 text-xs text-slate-500">{driver.email || 'No email'}</p></td>
+                    <td className="px-5 py-4 font-medium text-slate-700">{formatDriverPhone(driver.contactNumber) || <span className="font-normal text-slate-400">No phone number</span>}</td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="inline-flex items-center divide-x divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                        <button type="button" onClick={() => startEditingDriver(driver)} className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-[#2d75aa] transition hover:bg-sky-50">
+                          <Pencil className="h-4 w-4" /> Edit
+                        </button>
+                        <button type="button" onClick={() => setConfirmDriverDelete({ id: driver.id, name: driverName })} disabled={deletingDriverId === driver.id} className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-4 w-4" /> Delete</button>
+                      </div>
+                    </td>
                   </tr>;
                 })}
               </tbody>
