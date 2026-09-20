@@ -12,5 +12,6 @@ data class Delivery(
     val deliverySlot: String? = null,
     val phoneNumber: String? = null,
     val contactNumber: String? = null,
-    val deliveredAt: Long? = null
+    val deliveredAt: Long? = null,
+    val deliveryDate: Long? = null
 )

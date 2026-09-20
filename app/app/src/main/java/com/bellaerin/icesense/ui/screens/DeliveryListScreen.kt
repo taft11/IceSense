@@ -54,6 +54,7 @@ import com.bellaerin.icesense.utils.openGoogleMaps
 import com.google.android.gms.location.LocationServices
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -62,13 +63,14 @@ import kotlin.math.roundToInt
 fun DeliveryListScreen(
     deliveries: List<Delivery>,
     onConfirm: (String, String?) -> Unit,
+    onRescheduleTomorrow: (String) -> Unit = {},
     onOpenMenu: () -> Unit,
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Pending", "Delivered")
+    val tabs = listOf("Pending", "Overdue", "Delivered")
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -163,7 +165,19 @@ fun DeliveryListScreen(
             BellaErinLogo(iconSize = 40.dp, showText = false)
         }
 
-        val pendingCount = deliveries.count { !it.isConfirmed }
+        // Filter definitions matching precisely:
+        // Today or future/advance orders stay in Pending. 
+        // Past orders where deliveryDate is strictly before today's 00:00:00 start time instantly shift into Overdue.
+        val calTodayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStartMs = calTodayStart.timeInMillis
+
+        val pendingCount = deliveries.count { !it.isConfirmed && (it.deliveryDate == null || it.deliveryDate >= todayStartMs) }
+        val overdueCount = deliveries.count { !it.isConfirmed && it.deliveryDate != null && it.deliveryDate < todayStartMs }
         val deliveredCount = deliveries.count { it.isConfirmed }
 
         TabRow(
@@ -182,7 +196,11 @@ fun DeliveryListScreen(
             divider = {}
         ) {
             tabs.forEachIndexed { index, title ->
-                val count = if (index == 0) pendingCount else deliveredCount
+                val count = when (index) {
+                    0 -> pendingCount
+                    1 -> overdueCount
+                    else -> deliveredCount
+                }
                 Tab(
                     selected = selectedTabIndex == index,
                     onClick = { selectedTabIndex = index },
@@ -212,10 +230,10 @@ fun DeliveryListScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         val filteredDeliveries = remember(deliveries, selectedTabIndex) {
-            if (selectedTabIndex == 0) {
-                deliveries.filter { !it.isConfirmed }
-            } else {
-                deliveries.filter { it.isConfirmed }
+            when (selectedTabIndex) {
+                0 -> deliveries.filter { !it.isConfirmed && (it.deliveryDate == null || it.deliveryDate >= todayStartMs) }
+                1 -> deliveries.filter { !it.isConfirmed && it.deliveryDate != null && it.deliveryDate < todayStartMs }
+                else -> deliveries.filter { it.isConfirmed }.sortedByDescending { it.deliveredAt ?: 0L }
             }
         }
 
@@ -226,14 +244,22 @@ fun DeliveryListScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = if (selectedTabIndex == 0) Icons.Default.Check else Icons.Default.LocationOn,
+                        imageVector = when (selectedTabIndex) {
+                            0 -> Icons.Default.Check
+                            1 -> Icons.Default.Close
+                            else -> Icons.Default.LocationOn
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.outlineVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = if (selectedTabIndex == 0) "All caught up!" else "No deliveries yet",
+                        text = when (selectedTabIndex) {
+                            0 -> "All caught up for today!"
+                            1 -> "No overdue deliveries"
+                            else -> "No deliveries completed yet"
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -241,7 +267,7 @@ fun DeliveryListScreen(
             }
         } else {
             Column {
-                if ((!hasLocationPermission) && (selectedTabIndex == 0)) {
+                if ((!hasLocationPermission) && (selectedTabIndex == 0 || selectedTabIndex == 1)) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -265,7 +291,6 @@ fun DeliveryListScreen(
                 ) {
                     if (selectedTabIndex == 0) {
                         val slots = listOf("8:00 AM - 11:00 AM", "11:00 AM - 2:00 PM", "2:00 PM - 5:00 PM")
-                        
                         slots.forEach { slot ->
                             val slotDeliveries = filteredDeliveries.filter { it.deliverySlot == slot }
                             if (slotDeliveries.isNotEmpty()) {
@@ -289,7 +314,8 @@ fun DeliveryListScreen(
                                                 }
                                             }
                                         },
-                                        onPermissionRequest = permissionLauncher::launch
+                                        onPermissionRequest = permissionLauncher::launch,
+                                        onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
                                     )
                                 }
                             }
@@ -317,9 +343,32 @@ fun DeliveryListScreen(
                                             }
                                         }
                                     },
-                                    onPermissionRequest = permissionLauncher::launch
+                                    onPermissionRequest = permissionLauncher::launch,
+                                    onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
                                 )
                             }
+                        }
+                    } else if (selectedTabIndex == 1) {
+                        items(filteredDeliveries, key = { it.id }) { delivery ->
+                            DeliveryCardItem(
+                                delivery = delivery,
+                                hasLocationPermission = hasLocationPermission,
+                                onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
+                                onConfirmRequest = {
+                                    getCurrentLocation(context, fusedLocationClient) { _ ->
+                                        currentDeliveryId = delivery.id
+                                        if (hasCameraPermission) {
+                                            val uri = createImageUri(context)
+                                            tempPhotoUri = uri
+                                            cameraLauncher.launch(uri)
+                                        } else {
+                                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                        }
+                                    }
+                                },
+                                onPermissionRequest = permissionLauncher::launch,
+                                onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
+                            )
                         }
                     } else {
                         items(filteredDeliveries, key = { it.id }) { delivery ->
@@ -328,7 +377,8 @@ fun DeliveryListScreen(
                                 hasLocationPermission = hasLocationPermission,
                                 onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
                                 onConfirmRequest = { /* Not needed for delivered */ },
-                                onPermissionRequest = permissionLauncher::launch
+                                onPermissionRequest = permissionLauncher::launch,
+                                onRescheduleTomorrow = {}
                             )
                         }
                     }
@@ -383,7 +433,8 @@ fun DeliveryCardItem(
     hasLocationPermission: Boolean,
     onOpenMap: () -> Unit,
     onConfirmRequest: () -> Unit,
-    onPermissionRequest: (String) -> Unit
+    onPermissionRequest: (String) -> Unit,
+    onRescheduleTomorrow: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showConfirmDialog by remember { mutableStateOf(value = false) }
@@ -464,19 +515,7 @@ fun DeliveryCardItem(
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Status Indicator Bar
-            Box(
-                modifier = Modifier
-                    .width(6.dp)
-                    .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .background(
-                        if (delivery.isConfirmed) Color(0xFF4CAF50) else Color(0xFFFF9800)
-                    )
-            )
-
-            Column(modifier = Modifier.padding(start = 22.dp, end = 20.dp, top = 20.dp, bottom = 20.dp)) {
+        Column(modifier = Modifier.padding(start = 22.dp, end = 20.dp, top = 20.dp, bottom = 20.dp)) {
                 // Header: Order ID and Contact Actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -497,7 +536,16 @@ fun DeliveryCardItem(
                             )
                         }
                         
-                        if (delivery.deliverySlot != null) {
+                        val cardDateStr = remember(delivery.deliveryDate) {
+                            if (delivery.deliveryDate == null) ""
+                            else {
+                                try {
+                                    SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(delivery.deliveryDate))
+                                } catch (e: Exception) { "" }
+                            }
+                        }
+
+                        if (delivery.deliverySlot != null || cardDateStr.isNotEmpty()) {
                             Spacer(modifier = Modifier.width(12.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -508,7 +556,7 @@ fun DeliveryCardItem(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = delivery.deliverySlot,
+                                    text = if (cardDateStr.isNotEmpty()) "$cardDateStr • ${delivery.deliverySlot ?: ""}" else (delivery.deliverySlot ?: ""),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.outline,
                                     fontWeight = FontWeight.Bold
@@ -618,9 +666,9 @@ fun DeliveryCardItem(
                     // Status Badge
                     Column(horizontalAlignment = Alignment.End) {
                         Surface(
-                            color = if (delivery.isConfirmed) 
-                                Color(0xFFE8F5E9) 
-                            else 
+                            color = if (delivery.isConfirmed)
+                                Color(0xFFE8F5E9)
+                            else
                                 Color(0xFFFFF3E0),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -722,9 +770,9 @@ fun DeliveryCardItem(
                                 else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
                             }
                         }
+                        
                     }
                 }
-            }
         }
     }
 }

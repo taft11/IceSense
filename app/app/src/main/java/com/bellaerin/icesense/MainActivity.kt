@@ -36,10 +36,14 @@ import com.bellaerin.icesense.ui.screens.EditProfileScreen
 import com.bellaerin.icesense.ui.screens.LoginScreen
 import com.bellaerin.icesense.ui.theme.IceSenseTheme
 import com.bellaerin.icesense.utils.uploadProofImage
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -121,15 +125,15 @@ fun DeliveryApp(
                             return@addSnapshotListener
                         }
 
-                        // Show orders only when they are "Processing" or already "Delivered"
+                        // Show orders when they are "Processing", "Delivered", "Pending", or "pending"
                         // AND they are assigned to the current driver
-                        val visibleStatuses = listOf("Processing", "Delivered")
+                        val visibleStatuses = listOf("Processing", "Delivered", "Pending", "pending")
                         val currentDriverId = auth.currentUser?.uid
 
                         val filteredDocs = orderDocs.filter { 
                             val status = it.getString("status") ?: ""
                             val assignedDriverId = it.getString("assignedDriverId")
-                            
+
                             (status in visibleStatuses) && (assignedDriverId == currentDriverId)
                         }
 
@@ -147,6 +151,22 @@ fun DeliveryApp(
                             val status = doc.getString("status") ?: ""
                             val deliveryTimeSlot = doc.getString("deliveryTimeSlot")
                             val deliveredAt = doc.getTimestamp("deliveredAt")?.toDate()?.time
+                            val deliveryDate: Long? = when (val rawDate = doc.get("deliveryDate")) {
+                                is Timestamp -> rawDate.toDate().time
+                                is Number -> rawDate.toLong()
+                                is String -> {
+                                    rawDate.toLongOrNull() ?: try {
+                                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(rawDate)?.time
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                                else -> null
+                            } ?: when (val rawCreated = doc.get("createdAt")) {
+                                is Timestamp -> rawCreated.toDate().time
+                                is Number -> rawCreated.toLong()
+                                else -> null
+                            }
 
                             if (userId != null) {
                                 Log.d("IceSense", "Fetching user $userId for order ${doc.id}")
@@ -210,6 +230,7 @@ fun DeliveryApp(
                                             phoneNumber = phoneNumber,
                                             contactNumber = contactNumber,
                                             deliveredAt = deliveredAt,
+                                            deliveryDate = deliveryDate,
                                         )
 
                                         fetchedCount++
@@ -409,6 +430,18 @@ fun DeliveryApp(
                                         "deliveredAt", FieldValue.serverTimestamp()
                                     )
                             }
+                        },
+                        onRescheduleTomorrow = { id ->
+                            val calendar = Calendar.getInstance()
+                            calendar.add(Calendar.DAY_OF_YEAR, 1)
+                            firestore.collection("orders").document(id)
+                                .update("deliveryDate", Timestamp(calendar.time))
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "Rescheduled to tomorrow!", Toast.LENGTH_SHORT).show()
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Failed to reschedule", Toast.LENGTH_SHORT).show()
+                                }
                         }
                     ) {
                         scope.launch { drawerState.open() }
