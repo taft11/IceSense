@@ -7,6 +7,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 import Overview from './Overview';
 import Orders from './Orders';
+import { restoreCancelledOrderStock } from './orderStock';
 import Inventory from './Inventory';
 import Deliveries from './Deliveries';
 import DemandForecastPage from './DemandForecastPage';
@@ -370,6 +371,7 @@ export default function AdminDashboard() {
     if (!selectedRejectOrder?.id) return;
     try {
       setVerificationLoadingId(selectedRejectOrder.id);
+      await restoreCancelledOrderStock(selectedRejectOrder);
       await updateDoc(doc(db, 'orders', selectedRejectOrder.id), {
         paymentStatus: 'REJECTED',
         status: 'Cancelled',

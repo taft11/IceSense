@@ -160,7 +160,15 @@ export default function OrderView({
                 <button type="button" onClick={onDecrease} className="rounded-xl border border-slate-200 bg-white p-3 text-slate-800 shadow-sm transition hover:bg-slate-100">
                   <Minus className="h-5 w-5" />
                 </button>
-                <input type="number" readOnly value={quantity} className="w-16 bg-transparent text-center text-2xl font-bold focus:outline-none" />
+                <input
+                  type="number"
+                  value={quantity}
+                  min="1"
+                  max={activeStock}
+                  onChange={onQuantityChange}
+                  aria-label="Quantity"
+                  className="no-spinner w-16 bg-transparent text-center text-2xl font-bold focus:outline-none"
+                />
                 <button type="button" onClick={onIncrease} className="rounded-lg border border-gray-100 bg-white p-3 text-gray-800 shadow-sm transition hover:bg-gray-100" disabled={quantity >= activeStock}>
                   <Plus className="h-5 w-5" />
                 </button>

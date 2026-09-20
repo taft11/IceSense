@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { onValue, ref, runTransaction } from 'firebase/database';
 import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { createWorker } from 'tesseract.js';
-import { auth, db, storage } from '../../services/firebase';
+import { auth, database, db, storage } from '../../services/firebase';
 import { PRODUCTS } from './data/products';
 import HeaderNav from './components/HeaderNav';
 import OrderView from './components/OrderView';
@@ -18,6 +19,66 @@ import { getMissingProfileFields } from './utils/profileValidation';
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
 
 const getCartStorageKey = (userId = null) => (userId ? `icesense-cart-v1-${userId}` : 'icesense-cart-v1-guest');
+
+const PRODUCT_STOCK_PATHS = {
+  'tube-5': ['tube_ice', '5kg_sacks'],
+  'tube-35': ['tube_ice', '35kg_sacks'],
+  'tube-50': ['tube_ice', '50kg_sacks'],
+  'crushed-crate': ['crushed_ice', '5kg_sacks'],
+  'crushed-sack': ['crushed_ice', '35kg_sacks'],
+  'crushed-50': ['crushed_ice', '50kg_sacks'],
+};
+
+const getStockRequests = (items) => {
+  const requests = new Map();
+
+  items.forEach((item) => {
+    const [sectionKey, stockKey] = PRODUCT_STOCK_PATHS[item.productId] || [];
+    const quantity = Number(item.quantity || 0);
+    if (!sectionKey || !stockKey || quantity <= 0) return;
+
+    const path = `${sectionKey}/sacks_breakdown/${stockKey}`;
+    requests.set(path, (requests.get(path) || 0) + quantity);
+  });
+
+  return requests;
+};
+
+const releaseStockReservations = async (reservations) => {
+  await Promise.all(
+    reservations.map(({ path, quantity }) => runTransaction(
+      ref(database, `inventory/scale_1/${path}`),
+      (currentValue) => Number(currentValue || 0) + quantity
+    ))
+  );
+};
+
+const reserveStockForOrder = async (items) => {
+  const reservations = [];
+
+  try {
+    for (const [path, quantity] of getStockRequests(items)) {
+      const result = await runTransaction(
+        ref(database, `inventory/scale_1/${path}`),
+        (currentValue) => {
+          const availableStock = Number(currentValue || 0);
+          return availableStock >= quantity ? availableStock - quantity : undefined;
+        }
+      );
+
+      if (!result.committed) {
+        throw new Error('INSUFFICIENT_STOCK');
+      }
+
+      reservations.push({ path, quantity });
+    }
+
+    return reservations;
+  } catch (error) {
+    await releaseStockReservations(reservations);
+    throw error;
+  }
+};
 
 const DELIVERY_TIME_SLOTS = [
   { id: 'morning', label: '8:00 AM - 11:00 AM' },
@@ -180,14 +241,7 @@ export default function CustomerPortal() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [stocks, setStocks] = useState({
-    'tube-5': 85,
-    'tube-35': 42,
-    'tube-50': 124,
-    'crushed-crate': 15,
-    'crushed-sack': 60,
-    'crushed-50': 60,
-  });
+  const [stocks, setStocks] = useState({});
 
   const [selectedIceType, setSelectedIceType] = useState('tube');
   const [selectedProductId, setSelectedProductId] = useState('tube-50');
@@ -287,6 +341,30 @@ export default function CustomerPortal() {
   }, [activeUserId, cartItems]);
 
   useEffect(() => {
+    const inventoryRef = ref(database, 'inventory/scale_1');
+    const unsubscribeInventory = onValue(
+      inventoryRef,
+      (snapshot) => {
+        const inventory = snapshot.val() || {};
+        const nextStocks = Object.fromEntries(
+          PRODUCTS.map((product) => {
+            const [sectionKey, stockKey] = PRODUCT_STOCK_PATHS[product.id] || [];
+            return [product.id, Number(inventory?.[sectionKey]?.sacks_breakdown?.[stockKey] || 0)];
+          })
+        );
+
+        setStocks(nextStocks);
+      },
+      (error) => {
+        console.error('Failed to load live inventory limits', error);
+        setStocks({});
+      }
+    );
+
+    return unsubscribeInventory;
+  }, []);
+
+  useEffect(() => {
     if (!toast.visible) return;
 
     const timer = window.setTimeout(() => {
@@ -317,7 +395,7 @@ export default function CustomerPortal() {
       .filter((item) => item.productId === productId)
       .reduce((total, item) => total + item.quantity, 0);
 
-    return stocks[productId] - currentCartQty;
+    return Number(stocks[productId] || 0) - currentCartQty;
   };
 
   // Determine active view from URL path
@@ -706,6 +784,9 @@ export default function CustomerPortal() {
     setOrderStatus('processing');
     setReceiptError('');
 
+    let stockReservations = [];
+    let orderCreated = false;
+
     try {
       const ordersRef = collection(db, 'orders');
 
@@ -754,16 +835,10 @@ export default function CustomerPortal() {
             : null,
       };
 
+          stockReservations = await reserveStockForOrder(cartItems);
       const orderDocRef = await addDoc(ordersRef, orderPayload);
+          orderCreated = true;
       await updateDoc(orderDocRef, { orderId: orderDocRef.id });
-
-      setStocks((prev) => {
-        const nextStocks = { ...prev };
-        cartItems.forEach((item) => {
-          nextStocks[item.productId] = Math.max(0, prev[item.productId] - item.quantity);
-        });
-        return nextStocks;
-      });
 
       setCartItems([]);
       setReceiptFile(null);
@@ -777,8 +852,16 @@ export default function CustomerPortal() {
 
       setTimeout(() => setOrderStatus('idle'), 3000);
     } catch (error) {
+      if (!orderCreated && stockReservations.length > 0) {
+        await releaseStockReservations(stockReservations);
+      }
+
       console.error('Order submission failed', error);
-      setOrdersError('Your order could not be saved. Please try again.');
+      setOrdersError(
+        error.message === 'INSUFFICIENT_STOCK'
+          ? 'Some items are no longer available in the requested quantity. Please update your cart and try again.'
+          : 'Your order could not be saved. Please try again.'
+      );
       setOrderStatus('idle');
     }
   };

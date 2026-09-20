@@ -53,6 +53,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /proofs/{proofId} {
+      allow read: if isAdmin() || isDriver();
+      allow create, update: if isAdmin() || isDriver();
+      allow delete: if isAdmin();
+    }
+
     match /users/{userId} {
       // Drivers need to read customer documents to see delivery addresses
       allow read: if isAdmin() || isOwner(userId) || isDriver();

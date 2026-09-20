@@ -5,6 +5,10 @@ import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, 
 import useDemandForecast from '../../hooks/useDemandForecast';
 
 const formatKg = (value) => `${Math.round(Number(value || 0)).toLocaleString()} kg`;
+const FREEZER_TOO_COLD_THRESHOLD = -22;
+const FREEZER_STABLE_MIN = -20;
+const FREEZER_STABLE_MAX = -18;
+const FREEZER_TOO_WARM_THRESHOLD = -15;
 
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
@@ -95,6 +99,21 @@ export default function Overview({
     return `${normalizedName} × ${quantity}`;
   };
 
+  const freezerTemperature = Number.parseFloat(iotData?.temperature);
+  const hasFreezerTemperature = Number.isFinite(freezerTemperature);
+  const freezerStatus = !hasFreezerTemperature
+    ? { label: 'N/A', className: 'border-slate-200 bg-slate-50 text-slate-500', barClassName: 'bg-slate-300' }
+    : freezerTemperature > FREEZER_TOO_WARM_THRESHOLD
+      ? { label: 'CRITICAL', className: 'border-red-200/60 bg-red-50 text-red-700', barClassName: 'bg-red-500' }
+      : freezerTemperature < FREEZER_TOO_COLD_THRESHOLD
+        ? { label: 'TOO COLD', className: 'border-blue-200/60 bg-blue-50 text-blue-700', barClassName: 'bg-blue-500' }
+        : freezerTemperature >= FREEZER_STABLE_MIN && freezerTemperature <= FREEZER_STABLE_MAX
+          ? { label: 'STABLE', className: 'border-emerald-200/60 bg-emerald-50 text-emerald-700', barClassName: 'bg-emerald-500' }
+          : { label: 'MONITOR', className: 'border-amber-200/60 bg-amber-50 text-amber-700', barClassName: 'bg-amber-500' };
+  const freezerProgress = hasFreezerTemperature
+    ? Math.max(0, Math.min(100, ((freezerTemperature - FREEZER_TOO_COLD_THRESHOLD) / (FREEZER_TOO_WARM_THRESHOLD - FREEZER_TOO_COLD_THRESHOLD)) * 100))
+    : 0;
+
   return (
     <div className="animate-fade-in overview-page">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -112,16 +131,18 @@ export default function Overview({
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Freezer Temp</h3>
-            <span className="rounded-full border border-red-200/60 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">🔴 CRITICAL</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${freezerStatus.className}`}>
+              {freezerStatus.label}
+            </span>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
               <p className="text-3xl font-bold text-slate-900">{iotData.temperature}</p>
-              <span className="text-sm text-slate-500">/ -18°C Target</span>
+              <span className="text-sm text-slate-500">/ Stable: -20°C to -18°C</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">Humidity: {iotData.humidity}</p>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full w-[88%] rounded-full bg-red-500" />
+              <div className={`h-full rounded-full ${freezerStatus.barClassName}`} style={{ width: `${freezerProgress}%` }} />
             </div>
           </div>
         </div>
