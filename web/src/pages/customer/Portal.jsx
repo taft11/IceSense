@@ -307,6 +307,9 @@ export default function CustomerPortal() {
   const [isCheckoutConfirmOpen, setIsCheckoutConfirmOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptReferenceNumber, setReceiptReferenceNumber] = useState('');
+  const [detectedReceiptReferenceNumber, setDetectedReceiptReferenceNumber] = useState('');
+  const [isReceiptReferenceConfirmed, setIsReceiptReferenceConfirmed] = useState(false);
+  const [isReceiptReferenceEditing, setIsReceiptReferenceEditing] = useState(false);
   const [isExtractingReference, setIsExtractingReference] = useState(false);
   const [receiptError, setReceiptError] = useState('');
   const cartButtonRef = useRef(null);
@@ -881,11 +884,21 @@ export default function CustomerPortal() {
       redirectToAddressSetup();
       return;
     }
+    setReceiptFile(null);
+    setReceiptReferenceNumber('');
+    setDetectedReceiptReferenceNumber('');
+    setIsReceiptReferenceConfirmed(false);
+    setIsReceiptReferenceEditing(false);
+    setIsExtractingReference(false);
     setReceiptError('');
     setIsCheckoutConfirmOpen(true);
   };
 
   const confirmCheckoutOrder = () => {
+    if (detectedReceiptReferenceNumber && !isReceiptReferenceConfirmed && !isReceiptReferenceEditing) {
+      setReceiptError('Please confirm whether the detected reference number is correct before placing your order.');
+      return;
+    }
     setIsCheckoutConfirmOpen(false);
     handleOrder();
   };
@@ -893,6 +906,9 @@ export default function CustomerPortal() {
   const handleReceiptFileChange = async (file) => {
     setReceiptFile(file);
     setReceiptReferenceNumber('');
+    setDetectedReceiptReferenceNumber('');
+    setIsReceiptReferenceConfirmed(false);
+    setIsReceiptReferenceEditing(false);
     setReceiptError('');
 
     if (!file) return;
@@ -922,6 +938,7 @@ export default function CustomerPortal() {
       const detectedReferenceNumber = detectedReferences.sort((left, right) => right.length - left.length)[0] || '';
 
       if (detectedReferenceNumber) {
+        setDetectedReceiptReferenceNumber(detectedReferenceNumber);
         setReceiptReferenceNumber(detectedReferenceNumber);
       }
     } catch (error) {
@@ -1259,6 +1276,9 @@ export default function CustomerPortal() {
           setIsCheckoutConfirmOpen(false);
           setReceiptFile(null);
           setReceiptReferenceNumber('');
+          setDetectedReceiptReferenceNumber('');
+          setIsReceiptReferenceConfirmed(false);
+          setIsReceiptReferenceEditing(false);
         }}
         getRemainingStock={getRemainingStockForProduct}
         deliveryDate={deliveryDate}
@@ -1275,6 +1295,18 @@ export default function CustomerPortal() {
         hasAddress={hasSavedAddress}
         receiptFile={receiptFile}
         receiptReferenceNumber={receiptReferenceNumber}
+        detectedReceiptReferenceNumber={detectedReceiptReferenceNumber}
+        isReceiptReferenceConfirmed={isReceiptReferenceConfirmed}
+        isReceiptReferenceEditing={isReceiptReferenceEditing}
+        onConfirmReceiptReference={() => {
+          setIsReceiptReferenceConfirmed(true);
+          setIsReceiptReferenceEditing(false);
+        }}
+        onEditReceiptReference={() => {
+          setIsReceiptReferenceConfirmed(false);
+          setIsReceiptReferenceEditing(true);
+          setReceiptReferenceNumber('');
+        }}
         onReceiptReferenceNumberChange={setReceiptReferenceNumber}
         isExtractingReference={isExtractingReference}
         onReceiptFileChange={handleReceiptFileChange}

@@ -28,6 +28,11 @@ export default function CartSidebar({
   hasAddress,
   receiptFile,
   receiptReferenceNumber,
+  detectedReceiptReferenceNumber,
+  isReceiptReferenceConfirmed,
+  isReceiptReferenceEditing,
+  onConfirmReceiptReference,
+  onEditReceiptReference,
   onReceiptReferenceNumberChange,
   isExtractingReference,
   onReceiptFileChange,
@@ -45,105 +50,147 @@ export default function CartSidebar({
         }`}
       >
         {isCheckoutConfirmOpen && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-            <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="rounded-full bg-sky-100 p-2 text-[#4091c9]">
-                  <ShoppingCart className="h-4 w-4" />
+          <div className="absolute inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 p-3 sm:p-5">
+            <div className="my-auto max-h-full w-full max-w-md overflow-y-auto rounded-[1.5rem] bg-white p-4 shadow-2xl sm:p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-2xl bg-sky-100 p-2.5 text-[#4091c9]">
+                  <ShoppingCart className="h-5 w-5" />
                 </div>
-                <div>
-                  <h4 className="text-lg font-bold text-gray-900">Confirm Checkout</h4>
-                  <p className="text-sm text-gray-500">Please confirm your order details before proceeding.</p>
+                <div className="min-w-0">
+                  <h4 className="text-lg font-bold leading-tight text-gray-900">Confirm Checkout</h4>
+                  <p className="mt-1 text-sm leading-5 text-gray-500">Review your payment details before placing this order.</p>
                 </div>
               </div>
 
-              <div className="mb-4 rounded-2xl bg-gray-50 p-3 text-sm text-gray-700">
-                <div className="mb-2 flex items-center justify-between">
+              <div className="mb-3 grid grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
+                <div className="pr-2">
                   <span>Items</span>
-                  <span className="font-semibold text-gray-900">{cartItemCount}</span>
+                  <p className="mt-1 font-semibold text-gray-900">{cartItemCount}</p>
                 </div>
-                <div className="mb-2 flex items-center justify-between">
+                <div className="px-2">
                   <span>Total</span>
-                  <span className="font-semibold text-gray-900">₱{cartSubtotal.toFixed(2)}</span>
+                  <p className="mt-1 font-semibold text-gray-900">₱{cartSubtotal.toFixed(2)}</p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="pl-2">
                   <span>Delivery</span>
-                  <span className="font-semibold text-gray-900">{deliveryDateHeading}</span>
+                  <p className="mt-1 truncate font-semibold text-gray-900">{deliveryDateHeading}</p>
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="mb-3 flex items-center gap-3 text-sm font-semibold text-gray-800">
+              <div className="rounded-2xl border border-gray-200 bg-white p-3.5 sm:p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <ShoppingCart className="h-4 w-4 text-[#4091c9]" />
                   GCash Payment Instructions
                 </div>
                 <div className="grid gap-3 text-sm text-gray-700">
-                  <div className="rounded-2xl border border-gray-200 bg-slate-50 p-3">
+                  <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3">
                     <p className="font-semibold text-gray-900">Pay via GCash</p>
-                    <p className="mt-1 text-gray-600">Use the QR code below and upload your receipt screenshot to complete checkout.</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">Scan the QR code, then upload your payment receipt below.</p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-[180px_auto] items-center">
+                  <div className="grid items-center gap-3 sm:grid-cols-[148px_auto]">
                     <a
                       href="/gcash-qr.png"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                      className="mx-auto block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md sm:mx-0"
                     >
                       <img
                         src="/gcash-qr.png"
                         alt="GCash QR code"
-                        className="h-40 w-full max-w-[180px] object-contain"
+                        className="h-36 w-36 object-contain"
                       />
                     </a>
-                    <div className="space-y-1 text-sm text-gray-700">
+                    <div className="space-y-1 text-xs leading-5 text-gray-600">
                       <p className="font-semibold text-gray-900">GCash Account</p>
                       <p>Account Name: Bella Erin Tube Ice</p>
                       <p>GCash Number: 0917-123-4567</p>
                     </div>
                   </div>
-                  <label className="block text-sm font-semibold text-gray-800" htmlFor="receiptUpload">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-700" htmlFor="receiptUpload">
                     Upload receipt screenshot
                   </label>
                   <input
                     id="receiptUpload"
+                    key={receiptFile?.name || 'empty-receipt'}
                     type="file"
                     accept="image/*"
                     onChange={(event) => onReceiptFileChange(event.target.files?.[0] || null)}
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
                   />
-                  <label className="block text-sm font-semibold text-gray-800" htmlFor="receiptReferenceNumber">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-700" htmlFor="receiptReferenceNumber">
                     Receipt reference number
                   </label>
-                  <input
-                    id="receiptReferenceNumber"
-                    type="text"
-                    value={receiptReferenceNumber}
-                    onChange={(event) => onReceiptReferenceNumberChange(event.target.value)}
-                    placeholder="Found beside Ref no."
-                    autoComplete="off"
-                    required
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
-                  />
-                  <p className="text-xs text-gray-500">
-                    {isExtractingReference ? 'Reading the reference number from your receipt...' : 'Check this value and correct it if needed.'}
-                  </p>
+                  {isExtractingReference ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs text-[#205a82]" role="status">
+                      <Clock3 className="h-4 w-4 shrink-0 animate-pulse" />
+                      <span>Reading the reference number from your receipt...</span>
+                    </div>
+                  ) : detectedReceiptReferenceNumber && !isReceiptReferenceConfirmed && !isReceiptReferenceEditing ? (
+                    <div className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#205a82]">Reference Number Detected:</p>
+                        <p className="mt-1 break-all rounded-lg bg-white px-2.5 py-2 font-mono text-base font-normal tracking-normal text-gray-900 shadow-sm">{detectedReceiptReferenceNumber}</p>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-800">Is this reference number correct?</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={onConfirmReceiptReference}
+                          className="rounded-xl bg-[#4091c9] px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-[#2d75aa]"
+                        >
+                          Yes, this is correct
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onEditReceiptReference}
+                          className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+                        >
+                          No, edit reference number
+                        </button>
+                      </div>
+                    </div>
+                  ) : isReceiptReferenceConfirmed ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><CheckCircle className="h-4 w-4" /> Confirmed reference</p>
+                        <p className="mt-1 break-all font-mono text-sm font-bold text-gray-900">{detectedReceiptReferenceNumber}</p>
+                      </div>
+                      <button type="button" onClick={onEditReceiptReference} className="shrink-0 text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-950">
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        id="receiptReferenceNumber"
+                        type="text"
+                        value={receiptReferenceNumber}
+                        onChange={(event) => onReceiptReferenceNumberChange(event.target.value)}
+                        placeholder="Found beside Ref no."
+                        autoComplete="off"
+                        required
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+                      />
+                      <p className="text-xs text-gray-500">Enter the reference number shown on your receipt.</p>
+                    </>
+                  )}
                   {receiptError && <p className="text-sm text-red-600">{receiptError}</p>}
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={onCancelCheckout}
-                  className="flex-1 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={onConfirmCheckout}
-                  disabled={!receiptFile || !receiptReferenceNumber.trim() || isExtractingReference}
-                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${receiptFile && receiptReferenceNumber.trim() && !isExtractingReference ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'bg-slate-300 text-slate-600 cursor-not-allowed'}`}
+                  disabled={!receiptFile || !receiptReferenceNumber.trim() || isExtractingReference || Boolean(detectedReceiptReferenceNumber && !isReceiptReferenceConfirmed && !isReceiptReferenceEditing)}
+                  className={`rounded-xl px-4 py-3 text-sm font-semibold text-white transition ${receiptFile && receiptReferenceNumber.trim() && !isExtractingReference && (!detectedReceiptReferenceNumber || isReceiptReferenceConfirmed || isReceiptReferenceEditing) ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'cursor-not-allowed bg-slate-300 text-slate-600'}`}
                 >
                   Place Order
                 </button>
