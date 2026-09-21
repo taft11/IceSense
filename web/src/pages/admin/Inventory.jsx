@@ -1,6 +1,6 @@
 import { getApp } from 'firebase/app';
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Calendar, ShieldCheck } from 'lucide-react';
 import { addDoc, collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDatabase, onValue, ref, update } from 'firebase/database';
 import { auth, db } from '../../services/firebase';
@@ -218,7 +218,7 @@ export default function Inventory() {
 
       if (Number.isNaN(date.getTime())) return 'N/A';
       return date.toLocaleString();
-    } catch (e) {
+    } catch {
       return 'N/A';
     }
   };
@@ -303,37 +303,16 @@ export default function Inventory() {
   const totalActiveWeight = inventoryRows.reduce((sum, item) => sum + item.totalWeightKg, 0);
   const totalSacks = inventoryRows.reduce((sum, item) => sum + item.currentStock, 0);
   const totalAuditPages = Math.max(1, Math.ceil(logs.length / logsPerPage));
+  const safeAuditPage = Math.min(auditPage, totalAuditPages);
   const paginatedLogs = useMemo(() => {
-    const startIndex = (auditPage - 1) * logsPerPage;
+    const startIndex = (safeAuditPage - 1) * logsPerPage;
     return logs.slice(startIndex, startIndex + logsPerPage);
-  }, [auditPage, logs, logsPerPage]);
-
-  useEffect(() => {
-    if (auditPage > totalAuditPages) {
-      setAuditPage(1);
-    }
-  }, [auditPage, totalAuditPages]);
+  }, [safeAuditPage, logs, logsPerPage]);
 
   const handleOpenAdjust = (itemId) => {
     setSelectedItemId(itemId);
     setAdjustValue(0);
     setIsAdjustOpen(true);
-  };
-
-  const handleCalibrateScale = async () => {
-    const currentUser = auth.currentUser;
-    const currentProduct = inventoryRows.find((item) => item.isMonitoredByScale) || inventoryRows[0];
-
-    await addDoc(collection(db, 'stock_logs'), {
-      productId: currentProduct?.id || 'tube-50',
-      changeQuantity: 0,
-      previousStock: currentProduct?.currentStock || 0,
-      newStock: currentProduct?.currentStock || 0,
-      reason: 'scale_recalibration',
-      source: 'automatic_scale',
-      performedBy: currentUser?.uid || 'ESP32_Scale_01',
-      timestamp: serverTimestamp(),
-    });
   };
 
   const handleSaveAdjustment = async () => {

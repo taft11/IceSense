@@ -14,7 +14,6 @@ export default function Orders({
   processingOrders,
   deliveredOrders,
   cancelledOrders,
-  completedOrders,
   ordersPage,
   totalOrderPages,
   setOrdersPage,
@@ -22,8 +21,6 @@ export default function Orders({
   setActiveOrderFilter,
   activeDateFilter,
   setActiveDateFilter,
-  formatDate,
-  verificationLoadingId,
   onApprovePayment,
   onOpenReceiptPreview,
   onOpenRejectModal,
@@ -41,6 +38,16 @@ export default function Orders({
     { key: 'delivered', label: 'Delivered', count: deliveredOrders },
     { key: 'cancelled', label: 'Cancelled', count: cancelledOrders },
   ];
+
+  const handleOrderFilterChange = (value) => {
+    setActiveOrderFilter(value);
+    setOrdersPage(1);
+  };
+
+  const handleOrderDateChange = (value) => {
+    setActiveDateFilter(value);
+    setOrdersPage(1);
+  };
 
   const openApproveConfirm = (order) => {
     setConfirmAction({ type: 'approve', order });
@@ -313,7 +320,7 @@ export default function Orders({
           {filterOptions.map((filter) => (
             <button
               key={filter.key}
-              onClick={() => setActiveOrderFilter(filter.key)}
+              onClick={() => handleOrderFilterChange(filter.key)}
               className={`rounded-full px-3 py-2 text-sm font-semibold transition ${activeOrderFilter === filter.key ? 'bg-[#4091c9] text-white shadow-sm' : 'bg-transparent text-slate-600 hover:bg-slate-100'}`}
             >
               {filter.label} ({filter.count})
@@ -334,13 +341,14 @@ export default function Orders({
           <input
             type="date"
             value={activeDateFilter}
-            onChange={(event) => setActiveDateFilter(event.target.value)}
+              onChange={(event) => handleOrderDateChange(event.target.value)}
             className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4091c9]"
           />
           <button
             onClick={() => {
               setActiveDateFilter('');
               setSearchTerm('');
+              setOrdersPage(1);
             }}
             className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
@@ -491,9 +499,31 @@ export default function Orders({
                                 </div>
 
                                 <div>
-                                  <p className="font-semibold text-slate-800">Proof of Delivery</p>
-                                  {isDeliveredOrder(order) ? (
-                                    podDataByOrderId[order.id]?.imageUrl ? (
+                                  <p className="font-semibold text-slate-800">
+                                    {podDataByOrderId[order.id]?.imageUrl ? 'Proof & Receipts' : 'Payment Receipt'}
+                                  </p>
+                                  <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Payment Receipt</p>
+                                  {receiptPreviewUrl ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenReceiptPreview(receiptPreviewUrl)}
+                                      className="mt-2 block overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm transition hover:border-[#4091c9] hover:shadow-md"
+                                      aria-label="Preview payment receipt"
+                                    >
+                                      <img
+                                        src={receiptPreviewUrl}
+                                        alt="Payment receipt thumbnail"
+                                        className="h-24 w-24 object-cover"
+                                      />
+                                    </button>
+                                  ) : (
+                                    <div className="mt-2 flex h-24 items-center justify-center rounded-lg border border-slate-300 bg-slate-200/70 px-3 text-center text-sm text-slate-500">
+                                      No payment receipt uploaded
+                                    </div>
+                                  )}
+                                  {podDataByOrderId[order.id]?.imageUrl && (
+                                    <>
+                                      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Proof of Delivery</p>
                                       <div className="mt-3">
                                         <img
                                           src={podDataByOrderId[order.id].imageUrl}
@@ -506,15 +536,7 @@ export default function Orders({
                                           <p>Driver: {podDataByOrderId[order.id].driverName || 'Unknown driver'}</p>
                                         </div>
                                       </div>
-                                    ) : (
-                                      <div className="mt-3 flex h-28 items-center justify-center rounded-lg border border-slate-300 bg-slate-200/70 text-sm text-slate-500">
-                                        No Proof of Delivery Uploaded
-                                      </div>
-                                    )
-                                  ) : (
-                                    <div className="mt-3 flex h-28 items-center justify-center rounded-lg border border-slate-300 bg-slate-200/70 text-sm text-slate-500">
-                                      No Proof of Delivery Uploaded
-                                    </div>
+                                    </>
                                   )}
                                 </div>
                               </div>

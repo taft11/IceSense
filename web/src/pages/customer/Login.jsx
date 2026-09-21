@@ -6,6 +6,14 @@ import { auth, db } from '../../services/firebase';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { sanitizePhoneNumberInput, getMissingProfileFields } from './utils/profileValidation';
 
+const PASSWORD_REQUIREMENTS = [
+  { label: 'At least 8 characters', test: (value) => value.length >= 8 },
+  { label: 'One uppercase letter', test: (value) => /[A-Z]/.test(value) },
+  { label: 'One lowercase letter', test: (value) => /[a-z]/.test(value) },
+  { label: 'One number', test: (value) => /\d/.test(value) },
+  { label: 'One special character', test: (value) => /[^A-Za-z0-9]/.test(value) },
+];
+
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -16,10 +24,12 @@ export default function Login() {
   const [lastName, setLastName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const passwordRequirementsMet = PASSWORD_REQUIREMENTS.every(({ test }) => test(password));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,8 +55,8 @@ export default function Login() {
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match!');
         }
-        if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters.');
+        if (!passwordRequirementsMet) {
+          throw new Error('Password does not meet all requirements.');
         }
 
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -80,6 +90,7 @@ export default function Login() {
     setError('');
     setPassword('');
     setConfirmPassword('');
+    setPasswordFocused(false);
     setFirstName('');
     setMiddleName('');
     setLastName('');
@@ -216,6 +227,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setPasswordFocused(true)}
                 placeholder=" "
                 className="peer w-full pb-2 pr-10 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
               />
@@ -232,6 +244,20 @@ export default function Login() {
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
+              {!isLogin && (passwordFocused || password) && !passwordRequirementsMet && (
+                <ul className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" aria-label="Password requirements">
+                  <li className="mb-1 font-semibold text-slate-700">Password requirements</li>
+                  {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+                    const isMet = test(password);
+                    return (
+                      <li key={label} className={isMet ? 'text-emerald-700' : 'text-slate-500'}>
+                        <span className="mr-2 font-semibold" aria-hidden="true">{isMet ? '✓' : '○'}</span>
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
 
             {!isLogin && (
@@ -264,9 +290,9 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!isLogin && !passwordRequirementsMet)}
               className={`w-full text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex justify-center items-center mt-8
-                ${loading ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa] hover:-translate-y-0.5'}`}
+                ${loading || (!isLogin && !passwordRequirementsMet) ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa] hover:-translate-y-0.5'}`}
             >
               {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
             </button>

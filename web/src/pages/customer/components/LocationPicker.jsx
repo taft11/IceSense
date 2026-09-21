@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet/dist/leaflet-src.esm.js';
 import 'leaflet/dist/leaflet.css';
 
@@ -9,11 +9,10 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const containerRef = useRef(null);
-  const abortControllerRef = useRef(null);
   const [isFindingLocation, setIsFindingLocation] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  const updateAddressFromGeocode = (address = {}) => {
+  const updateAddressFromGeocode = useCallback((address = {}) => {
     const street = [address.house_number, address.road, address.neighbourhood]
       .filter(Boolean)
       .join(' ')
@@ -28,9 +27,9 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
     onLocationChange('state', state);
     onLocationChange('postalCode', postalCode);
     onLocationChange('country', country);
-  };
+  }, [onLocationChange]);
 
-  const reverseGeocode = async (lat, lng) => {
+  const reverseGeocode = useCallback(async (lat, lng) => {
     try {
       setSearchError('');
       const params = new URLSearchParams({ format: 'json', lat: String(lat), lon: String(lng), addressdetails: '1' });
@@ -40,12 +39,12 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
       }
       const result = await response.json();
       updateAddressFromGeocode(result.address || {}, result.display_name || '');
-    } catch (error) {
+    } catch {
       setSearchError('Unable to resolve the selected location. Please try again or use search.');
     }
-  };
+  }, [updateAddressFromGeocode]);
 
-  const moveMarkerTo = (lat, lng, shouldReverseGeocode = true) => {
+  const moveMarkerTo = useCallback((lat, lng, shouldReverseGeocode = true) => {
     const coords = [lat, lng];
     if (markerRef.current) {
       markerRef.current.setLatLng(coords);
@@ -60,7 +59,7 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
     if (shouldReverseGeocode) {
       reverseGeocode(lat, lng);
     }
-  };
+  }, [onLocationChange, reverseGeocode]);
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -151,11 +150,8 @@ export default function LocationPicker({ latitude, longitude, onLocationChange }
         mapRef.current = null;
         markerRef.current = null;
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
     };
-  }, [onLocationChange, latitude, longitude]);
+  }, [latitude, longitude, moveMarkerTo]);
 
   useEffect(() => {
     if (!mapRef.current || latitude == null || longitude == null) return;

@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null && auth.token.admin === true",
+    "inventory": {
+      ".validate": "newData.hasChildren(['scale_1'])",
+      "scale_1": {
+        ".validate": "newData.hasChildren(['tube_ice', 'crushed_ice'])"
+      }
+    }
+  }
+}

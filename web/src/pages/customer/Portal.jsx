@@ -13,7 +13,6 @@ import OrderHistoryView from './components/OrderHistoryView';
 import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
 import PendingOrderConfirmationModal from './components/PendingOrderConfirmationModal';
-import LocationPicker from './components/LocationPicker';
 import { getMissingProfileFields } from './utils/profileValidation';
 
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
@@ -141,6 +140,26 @@ const getEarliestDeliveryDate = (referenceDate = new Date()) => {
   }
 
   return addDays(currentDate, 1);
+};
+
+const getInitialDeliveryDate = () => {
+  const savedSettings = getStoredDeliverySettings();
+  const earliestDate = getEarliestDeliveryDate();
+  const latestDate = addDays(new Date(), 14);
+  const savedDate = savedSettings?.deliveryDate;
+
+  if (savedDate) {
+    const parsedSavedDate = new Date(`${savedDate}T00:00:00`);
+    if (
+      !Number.isNaN(parsedSavedDate.getTime())
+      && parsedSavedDate >= earliestDate
+      && parsedSavedDate <= latestDate
+    ) {
+      return savedDate;
+    }
+  }
+
+  return toDateInputValue(earliestDate);
 };
 
 const optimizeReceiptImage = (file) => {
@@ -296,8 +315,7 @@ export default function CustomerPortal() {
     confirmPassword: '',
   });
   const [deliveryDate, setDeliveryDate] = useState(() => {
-    const savedSettings = getStoredDeliverySettings();
-    return savedSettings?.deliveryDate || toDateInputValue(getEarliestDeliveryDate());
+    return getInitialDeliveryDate();
   });
   const [deliverySlot, setDeliverySlot] = useState(() => {
     const savedSettings = getStoredDeliverySettings();

@@ -175,7 +175,8 @@ export default function AdminDashboard() {
   });
 
   const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
-  const paginatedOrders = filteredOrders.slice((ordersPage - 1) * ORDERS_PER_PAGE, ordersPage * ORDERS_PER_PAGE);
+  const safeOrdersPage = Math.min(ordersPage, totalOrderPages);
+  const paginatedOrders = filteredOrders.slice((safeOrdersPage - 1) * ORDERS_PER_PAGE, safeOrdersPage * ORDERS_PER_PAGE);
   const pendingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment').length;
   const pendingOrderItems = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment');
   const processingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'processing').length;
@@ -307,16 +308,6 @@ export default function AdminDashboard() {
       unsubscribeAuth();
     };
   }, [navigate]);
-
-  useEffect(() => {
-    if (ordersPage > totalOrderPages) {
-      setOrdersPage(totalOrderPages);
-    }
-  }, [ordersPage, totalOrderPages]);
-
-  useEffect(() => {
-    setOrdersPage(1);
-  }, [activeOrderFilter, activeDateFilter]);
 
   const handleSignOut = async () => {
     try {
@@ -516,7 +507,7 @@ export default function AdminDashboard() {
                   deliveredOrders={deliveredOrders}
                   cancelledOrders={cancelledOrders}
                   completedOrders={completedOrders}
-                  ordersPage={ordersPage}
+                  ordersPage={safeOrdersPage}
                   totalOrderPages={totalOrderPages}
                   setOrdersPage={setOrdersPage}
                   activeOrderFilter={activeOrderFilter}

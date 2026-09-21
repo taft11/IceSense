@@ -45,7 +45,7 @@ export default function CartSidebar({
         onClick={onClose}
       />
       <aside
-        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ${
+        className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -198,7 +198,7 @@ export default function CartSidebar({
             </div>
           </div>
         )}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-5">
           <div>
             <h3 className="text-lg font-bold text-gray-800">Your Cart</h3>
             <p className="text-sm text-gray-500">
@@ -214,7 +214,7 @@ export default function CartSidebar({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="px-6 py-5">
           {cartItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
               <p className="font-semibold text-gray-800">Your cart is empty</p>

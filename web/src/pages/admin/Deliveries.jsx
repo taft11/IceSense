@@ -315,8 +315,6 @@ export default function Deliveries() {
     return paymentStatus === 'paid' || paymentStatus === 'approved' || paymentStatus === 'payment_verified';
   };
 
-  const assignedOrders = orders.filter((order) => isReadyForDelivery(order) && order.assignedDriverId).length;
-  const approvedOrders = orders.filter((order) => isReadyForDelivery(order)).length;
   const filteredOrders = orders.filter((order) => {
     if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
@@ -370,13 +368,20 @@ export default function Deliveries() {
   const safePage = Math.min(currentPage, totalPages);
   const paginatedOrders = visibleOrders.slice((safePage - 1) * ORDERS_PER_PAGE, safePage * ORDERS_PER_PAGE);
 
-  useEffect(() => {
+  const handleFilterChange = (value) => {
+    setActiveFilter(value);
     setCurrentPage(1);
-  }, [activeFilter]);
+  };
 
-  useEffect(() => {
+  const handleDateFilterChange = (value) => {
+    setActiveDateFilter(value);
     setCurrentPage(1);
-  }, [activeDateFilter, searchTerm]);
+  };
+
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
 
   const resolveOrderAddress = (order) => {
     if (order.shippingAddress) return order.shippingAddress;
@@ -422,7 +427,7 @@ export default function Deliveries() {
           {Object.entries(FILTERS).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setActiveFilter(key)}
+              onClick={() => handleFilterChange(key)}
               className={`rounded-full px-3 py-2 text-sm font-semibold transition ${activeFilter === key ? 'bg-[#4091c9] text-white shadow-sm' : 'bg-transparent text-slate-600 hover:bg-slate-100'}`}
             >
               {label}
@@ -435,7 +440,7 @@ export default function Deliveries() {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search order / customer"
               className="w-44 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
@@ -444,12 +449,12 @@ export default function Deliveries() {
           <input
             type="date"
             value={activeDateFilter}
-            onChange={(e) => setActiveDateFilter(e.target.value)}
+            onChange={(e) => handleDateFilterChange(e.target.value)}
             className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4091c9]"
           />
 
           <button
-            onClick={() => { setActiveDateFilter(''); setSearchTerm(''); }}
+            onClick={() => { setActiveDateFilter(''); setSearchTerm(''); setCurrentPage(1); }}
             className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Reset

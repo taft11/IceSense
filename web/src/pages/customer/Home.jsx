@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Smartphone, Truck, ShieldCheck, Droplet, Snowflake, MapPin } from 'lucide-react';
+import { ArrowRight, Smartphone, Truck, ShieldCheck, Droplet, MapPin } from 'lucide-react';
 
 export default function Home() {
   return (

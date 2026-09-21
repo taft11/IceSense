@@ -57,10 +57,7 @@ export default function Overview({
   let waterPercent = null;
   let overflow = false;
 
-  if (rawDistance === null || Number.isNaN(rawDistance)) {
-    waterDepth = null;
-    waterPercent = null;
-  } else {
+  if (rawDistance !== null && !Number.isNaN(rawDistance)) {
     // h = total height - distance
     const h = TANK_TOTAL_HEIGHT - rawDistance;
 
@@ -86,7 +83,7 @@ export default function Overview({
     'Predicted Demand': Math.round(day.total_kg_demanded || 0),
   }));
 
-  const getReceiptPreviewUrl = (order) => order?.receiptUrl || order?.paymentReceiptUrl || order?.paymentProofUrl || order?.proofImageUrl || order?.proofUrl || null;
+  const getReceiptPreviewUrl = (order) => order?.receiptUrl || order?.paymentReceiptUrl || order?.paymentProofUrl || null;
   const getPaymentMethodLabel = (order) => {
     const value = String(order?.paymentMethod || order?.paymentType || '').trim();
     return value ? value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'Unspecified';
