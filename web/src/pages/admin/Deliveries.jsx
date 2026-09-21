@@ -59,6 +59,7 @@ export default function Deliveries() {
   const [confirmAssignment, setConfirmAssignment] = useState(null);
   const [confirmDriverDelete, setConfirmDriverDelete] = useState(null);
   const [driverForm, setDriverForm] = useState({ fullName: '', email: '', contactNumber: '09', password: '' });
+  const [driverPasswordFocused, setDriverPasswordFocused] = useState(false);
   const [phoneValidationAttempted, setPhoneValidationAttempted] = useState(false);
   const [phoneInputTooLong, setPhoneInputTooLong] = useState(false);
   const [editingDriverId, setEditingDriverId] = useState(null);
@@ -208,6 +209,7 @@ export default function Deliveries() {
           updatedAt: serverTimestamp(),
         });
         setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+        setDriverPasswordFocused(false);
         setEditingDriverId(null);
         setPhoneValidationAttempted(false);
         setPhoneInputTooLong(false);
@@ -240,6 +242,7 @@ export default function Deliveries() {
       });
       await signOut(driverAuth);
       setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+      setDriverPasswordFocused(false);
       setPhoneValidationAttempted(false);
       setPhoneInputTooLong(false);
       setDriverMessage(`${fullName} was added as a driver.`);
@@ -276,6 +279,7 @@ export default function Deliveries() {
       contactNumber: `09${getPhoneDigits(driver.contactNumber)}`,
       password: '',
     });
+    setDriverPasswordFocused(false);
     setDriverError('');
     setDriverMessage('');
     setPhoneValidationAttempted(false);
@@ -285,6 +289,7 @@ export default function Deliveries() {
   const cancelEditingDriver = () => {
     setEditingDriverId(null);
     setDriverForm({ fullName: '', email: '', contactNumber: '09', password: '' });
+    setDriverPasswordFocused(false);
     setPhoneValidationAttempted(false);
     setPhoneInputTooLong(false);
     setDriverError('');
@@ -500,20 +505,23 @@ export default function Deliveries() {
               <span id="driver-phone-help" role="alert" aria-live="polite" className="mt-1 block text-xs text-rose-600">Phone number must contain 11 digits.</span>
             )}
           </label>
-          <label className="block">
+          <label className="relative block">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Password{editingDriverId ? ' (optional)' : ''}</span>
-            <input type="password" name="password" value={driverForm.password} onChange={handleDriverFormChange} required={!editingDriverId} autoComplete="new-password" placeholder={editingDriverId ? 'Leave blank to keep current' : 'Enter a strong password'} aria-describedby="driver-password-help" className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-[#4091c9]/15" />
-            <ul id="driver-password-help" className="mt-2 space-y-1 text-xs leading-4 text-slate-500">
-              {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
-                const isSatisfied = test(driverForm.password);
-                return (
-                  <li key={label} className={`flex items-center gap-1.5 ${isSatisfied ? 'text-emerald-600' : 'text-slate-500'}`}>
-                    <span aria-hidden="true" className="w-3 text-center font-semibold">{isSatisfied ? '✓' : '○'}</span>
-                    <span>{label}</span>
-                  </li>
-                );
-              })}
-            </ul>
+            <input type="password" name="password" value={driverForm.password} onChange={handleDriverFormChange} onFocus={() => setDriverPasswordFocused(true)} onBlur={() => setDriverPasswordFocused(false)} required={!editingDriverId} autoComplete="new-password" placeholder={editingDriverId ? 'Leave blank to keep current' : 'Enter a strong password'} aria-describedby="driver-password-help" className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#4091c9] focus:ring-2 focus:ring-[#4091c9]/15" />
+            {driverPasswordFocused && (!editingDriverId || driverForm.password) && PASSWORD_REQUIREMENTS.some(({ test }) => !test(driverForm.password)) && (
+              <ul id="driver-password-help" className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-xl border border-slate-200 bg-white p-3 text-xs leading-4 text-slate-500 shadow-xl">
+                <li className="mb-1 font-semibold text-slate-700">Password requirements</li>
+                {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+                  const isSatisfied = test(driverForm.password);
+                  return (
+                    <li key={label} className={isSatisfied ? 'text-emerald-600' : 'text-slate-500'}>
+                      <span aria-hidden="true" className="mr-2 font-semibold">{isSatisfied ? '✓' : '○'}</span>
+                      {label}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </label>
           <div className="flex h-11 gap-2 lg:mt-6">
             <button type="submit" disabled={savingDriver || driverForm.contactNumber.length !== 11} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#4091c9] px-4 text-sm font-semibold text-white transition hover:bg-[#2d75aa] disabled:cursor-not-allowed disabled:opacity-60">

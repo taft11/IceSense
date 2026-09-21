@@ -228,6 +228,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 placeholder=" "
                 className="peer w-full pb-2 pr-10 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
               />
@@ -244,7 +245,7 @@ export default function Login() {
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
-              {!isLogin && (passwordFocused || password) && !passwordRequirementsMet && (
+              {!isLogin && passwordFocused && !passwordRequirementsMet && (
                 <ul className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" aria-label="Password requirements">
                   <li className="mb-1 font-semibold text-slate-700">Password requirements</li>
                   {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
