@@ -153,7 +153,9 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
                       {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-600">
-                      {notification.isNewOrder
+                      {notification.isDelivered
+                        ? `Your order #${notification.id.slice(0, 6).toUpperCase()} has been delivered.`
+                        : notification.isNewOrder
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was submitted and is awaiting payment verification.`
                         : `Order #${notification.id.slice(0, 6).toUpperCase()} is ${notification.statusLabel}.`}
                     </span>

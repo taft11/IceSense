@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react';
 
 export const DELIVERY_STEPS = [
-  'Pending Payment Verification',
+  'Pending',
   'Order Confirmed',
   'Processing',
   'Out for Delivery',
@@ -9,7 +9,7 @@ export const DELIVERY_STEPS = [
 ];
 
 export const PICKUP_STEPS = [
-  'Pending Payment Verification',
+  'Pending',
   'Order Confirmed',
   'Processing',
   'Ready for Pickup',
@@ -35,31 +35,32 @@ const getCurrentStatus = (order, fulfillmentType) => {
 
   if (
     (fulfillmentType === 'pickup' && ['ready for pickup', 'ready'].includes(status))
-    || (fulfillmentType === 'delivery' && ['out for delivery', 'assigned', 'in transit'].includes(status))
-    || (fulfillmentType === 'delivery' && ['out for delivery', 'assigned', 'in transit'].includes(deliveryStatus))
-    || (fulfillmentType === 'delivery' && order?.assignedDriverId)
+    || (fulfillmentType === 'delivery' && ['out for delivery', 'attempting', 'in transit', 'on the way'].includes(status))
+    || (fulfillmentType === 'delivery' && ['out for delivery', 'attempting', 'in transit', 'on the way'].includes(deliveryStatus))
   ) {
     return fulfillmentType === 'pickup' ? 'Ready for Pickup' : 'Out for Delivery';
   }
 
-  if (['processing', 'preparing'].includes(status) || ['paid', 'approved', 'payment verified'].includes(paymentStatus)) {
+  if (['confirmed', 'order confirmed'].includes(status)) return 'Order Confirmed';
+
+  if (['processing', 'preparing', 'assigned'].includes(status) || ['paid', 'approved', 'payment verified'].includes(paymentStatus)) {
     return 'Processing';
   }
 
-  if (['confirmed', 'order confirmed'].includes(status)) return 'Order Confirmed';
-
-  return 'Pending Payment Verification';
+  return 'Pending';
 };
 
 const getActiveStepIndex = (currentStatus, steps) => {
   const normalizedStatus = normalize(currentStatus);
   const statusAliases = {
-    pending: 'Pending Payment Verification',
-    'pending payment': 'Pending Payment Verification',
+    pending: 'Pending',
+    'pending payment': 'Pending',
+    'pending payment verification': 'Pending',
     confirmed: 'Order Confirmed',
     preparing: 'Processing',
     processed: 'Processing',
     'out for delivery': 'Out for Delivery',
+    attempting: 'Out for Delivery',
     assigned: 'Out for Delivery',
     'in transit': 'Out for Delivery',
     delivered: 'Delivered',

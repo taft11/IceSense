@@ -174,6 +174,8 @@ export default function FulfillmentManagement() {
         assignedDriverId: driverId || null,
         assignedDriverName: selectedDriver?.fullName || selectedDriver?.name || selectedDriver?.displayName || '',
         assignedDriverEmail: selectedDriver?.email || '',
+        assignedDriverPhone: selectedDriver?.contactNumber || '',
+        status: driverId ? 'Processing' : 'Order Confirmed',
         deliveryStatus: driverId ? 'Assigned' : 'Unassigned',
         updatedAt: serverTimestamp(),
       });

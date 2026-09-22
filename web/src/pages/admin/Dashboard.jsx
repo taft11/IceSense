@@ -381,7 +381,7 @@ export default function AdminDashboard() {
       setVerificationLoadingId(order.id);
       await updateDoc(doc(db, 'orders', order.id), {
         paymentStatus: 'PAID',
-        status: 'Processing',
+        status: 'Order Confirmed',
         readyForDelivery: true,
         verifiedAt: serverTimestamp(),
         verifiedBy: adminUid || null,
