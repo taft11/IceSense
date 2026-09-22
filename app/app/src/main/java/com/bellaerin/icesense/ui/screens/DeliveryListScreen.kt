@@ -49,6 +49,7 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.bellaerin.icesense.model.Delivery
 import com.bellaerin.icesense.ui.components.BellaErinLogo
+import com.bellaerin.icesense.ui.components.DeliveryCardShimmer
 import com.bellaerin.icesense.utils.getCurrentLocation
 import com.bellaerin.icesense.utils.openGoogleMaps
 import com.google.android.gms.location.LocationServices
@@ -62,15 +63,22 @@ import kotlin.math.roundToInt
 @Composable
 fun DeliveryListScreen(
     deliveries: List<Delivery>,
+    isLoading: Boolean = false,
     onConfirm: (String, String?) -> Unit,
     onRescheduleTomorrow: (String) -> Unit = {},
+    onStartDelivery: (String) -> Unit = {},
     onOpenMenu: () -> Unit,
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Pending", "Overdue", "Delivered")
+    val tabs = listOf("Pending", "Delivered")
+    
+    // ... existing location/camera permission code ...
+    // (keeping original logic for permissions)
+
+    // ... (rest of the header code) ...
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -165,19 +173,11 @@ fun DeliveryListScreen(
             BellaErinLogo(iconSize = 40.dp, showText = false)
         }
 
-        // Filter definitions matching precisely:
-        // Today or future/advance orders stay in Pending. 
-        // Past orders where deliveryDate is strictly before today's 00:00:00 start time instantly shift into Overdue.
-        val calTodayStart = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val todayStartMs = calTodayStart.timeInMillis
-
-        val pendingCount = deliveries.count { !it.isConfirmed && (it.deliveryDate == null || it.deliveryDate >= todayStartMs) }
-        val overdueCount = deliveries.count { !it.isConfirmed && it.deliveryDate != null && it.deliveryDate < todayStartMs }
+        // Filter definitions:
+        // Non-confirmed orders (excluding Failed) stay in Pending. 
+        // Confirmed orders are moved to Delivered.
+        // Overdue orders are automatically failed in the database and hidden from this view.
+        val pendingCount = deliveries.count { !it.isConfirmed && it.status != "Failed" }
         val deliveredCount = deliveries.count { it.isConfirmed }
 
         TabRow(
@@ -198,7 +198,6 @@ fun DeliveryListScreen(
             tabs.forEachIndexed { index, title ->
                 val count = when (index) {
                     0 -> pendingCount
-                    1 -> overdueCount
                     else -> deliveredCount
                 }
                 Tab(
@@ -231,13 +230,21 @@ fun DeliveryListScreen(
         
         val filteredDeliveries = remember(deliveries, selectedTabIndex) {
             when (selectedTabIndex) {
-                0 -> deliveries.filter { !it.isConfirmed && (it.deliveryDate == null || it.deliveryDate >= todayStartMs) }
-                1 -> deliveries.filter { !it.isConfirmed && it.deliveryDate != null && it.deliveryDate < todayStartMs }
+                0 -> deliveries.filter { !it.isConfirmed && it.status != "Failed" }
                 else -> deliveries.filter { it.isConfirmed }.sortedByDescending { it.deliveredAt ?: 0L }
             }
         }
 
-        if (filteredDeliveries.isEmpty()) {
+        if (isLoading) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(3) {
+                    DeliveryCardShimmer()
+                }
+            }
+        } else if (filteredDeliveries.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -246,7 +253,6 @@ fun DeliveryListScreen(
                     Icon(
                         imageVector = when (selectedTabIndex) {
                             0 -> Icons.Default.Check
-                            1 -> Icons.Default.Close
                             else -> Icons.Default.LocationOn
                         },
                         contentDescription = null,
@@ -257,7 +263,6 @@ fun DeliveryListScreen(
                     Text(
                         text = when (selectedTabIndex) {
                             0 -> "All caught up for today!"
-                            1 -> "No overdue deliveries"
                             else -> "No deliveries completed yet"
                         },
                         style = MaterialTheme.typography.bodyLarge,
@@ -315,7 +320,8 @@ fun DeliveryListScreen(
                                             }
                                         },
                                         onPermissionRequest = permissionLauncher::launch,
-                                        onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
+                                        onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) },
+                                        onStartDelivery = { onStartDelivery(delivery.id) }
                                     )
                                 }
                             }
@@ -344,31 +350,10 @@ fun DeliveryListScreen(
                                         }
                                     },
                                     onPermissionRequest = permissionLauncher::launch,
-                                    onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
+                                    onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) },
+                                    onStartDelivery = { onStartDelivery(delivery.id) }
                                 )
                             }
-                        }
-                    } else if (selectedTabIndex == 1) {
-                        items(filteredDeliveries, key = { it.id }) { delivery ->
-                            DeliveryCardItem(
-                                delivery = delivery,
-                                hasLocationPermission = hasLocationPermission,
-                                onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
-                                onConfirmRequest = {
-                                    getCurrentLocation(context, fusedLocationClient) { _ ->
-                                        currentDeliveryId = delivery.id
-                                        if (hasCameraPermission) {
-                                            val uri = createImageUri(context)
-                                            tempPhotoUri = uri
-                                            cameraLauncher.launch(uri)
-                                        } else {
-                                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                        }
-                                    }
-                                },
-                                onPermissionRequest = permissionLauncher::launch,
-                                onRescheduleTomorrow = { onRescheduleTomorrow(delivery.id) }
-                            )
                         }
                     } else {
                         items(filteredDeliveries, key = { it.id }) { delivery ->
@@ -378,7 +363,8 @@ fun DeliveryListScreen(
                                 onOpenMap = { openGoogleMaps(context, delivery.latitude, delivery.longitude) },
                                 onConfirmRequest = { /* Not needed for delivered */ },
                                 onPermissionRequest = permissionLauncher::launch,
-                                onRescheduleTomorrow = {}
+                                onRescheduleTomorrow = {},
+                                onStartDelivery = {}
                             )
                         }
                     }
@@ -434,11 +420,37 @@ fun DeliveryCardItem(
     onOpenMap: () -> Unit,
     onConfirmRequest: () -> Unit,
     onPermissionRequest: (String) -> Unit,
-    onRescheduleTomorrow: () -> Unit = {}
+    onRescheduleTomorrow: () -> Unit = {},
+    onStartDelivery: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showConfirmDialog by remember { mutableStateOf(value = false) }
+    var showStartDeliveryDialog by remember { mutableStateOf(value = false) }
     var showImagePreview by remember { mutableStateOf(value = false) }
+
+    if (showStartDeliveryDialog) {
+        AlertDialog(
+            onDismissRequest = { showStartDeliveryDialog = false },
+            title = { Text("Start Delivery?") },
+            text = { Text("Are you sure you are going to this customer's address now?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showStartDeliveryDialog = false
+                        onStartDelivery()
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Start Now")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDeliveryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     if ((showImagePreview) && (delivery.proofImageUrl != null)) {
         Dialog(onDismissRequest = { showImagePreview = false }) {
@@ -666,18 +678,27 @@ fun DeliveryCardItem(
                     // Status Badge
                     Column(horizontalAlignment = Alignment.End) {
                         Surface(
-                            color = if (delivery.isConfirmed)
-                                Color(0xFFE8F5E9)
-                            else
-                                Color(0xFFFFF3E0),
+                            color = when {
+                                delivery.isConfirmed -> Color(0xFFE8F5E9)
+                                delivery.status == "Attempting" -> Color(0xFFE3F2FD)
+                                else -> Color(0xFFFFF3E0)
+                            },
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = if (delivery.isConfirmed) "Delivered" else "Pending",
+                                text = when {
+                                    delivery.isConfirmed -> "Delivered"
+                                    delivery.status == "Attempting" -> "On the way"
+                                    else -> "Pending"
+                                },
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (delivery.isConfirmed) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                color = when {
+                                    delivery.isConfirmed -> Color(0xFF2E7D32)
+                                    delivery.status == "Attempting" -> Color(0xFF1976D2)
+                                    else -> Color(0xFFE65100)
+                                }
                             )
                         }
                         
@@ -745,32 +766,44 @@ fun DeliveryCardItem(
                             }
                         }
                     } else {
-                        // Action buttons for Pending
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    if (hasLocationPermission) onOpenMap() 
+                        // Action buttons for Pending / Attempting
+                        if (delivery.status == "Attempting") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (hasLocationPermission) onOpenMap() 
+                                        else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(vertical = 12.dp)
+                                ) {
+                                    Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Route")
+                                }
+                                
+                                SwipeToConfirmButton(modifier = Modifier.weight(2f)) {
+                                    if (hasLocationPermission) showConfirmDialog = true
                                     else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
-                                },
-                                modifier = Modifier.weight(1f),
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { showStartDeliveryDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                                 contentPadding = PaddingValues(vertical = 12.dp)
                             ) {
-                                Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Route")
-                            }
-                            
-                            SwipeToConfirmButton(modifier = Modifier.weight(2f)) {
-                                if (hasLocationPermission) showConfirmDialog = true
-                                else onPermissionRequest(Manifest.permission.ACCESS_FINE_LOCATION)
+                                Text("Start Delivery")
                             }
                         }
-                        
                     }
                 }
         }
