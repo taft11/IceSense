@@ -43,7 +43,7 @@ const formatDateLabel = (value) => new Intl.DateTimeFormat('en-PH', {
 const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 const downloadCsv = (rows) => {
-  const headers = ['Date', 'Orders', 'Gross Revenue', 'Net Sales', 'Bags Sold', 'Tons Sold', 'Average Order Value'];
+  const headers = ['Delivery Date', 'Orders', 'Gross Revenue', 'Net Sales', 'Kilograms Sold', 'Average Order Value'];
   const csv = [
     headers,
     ...rows.map((row) => [
@@ -51,8 +51,7 @@ const downloadCsv = (rows) => {
       row.orders,
       row.grossRevenue,
       row.netSales,
-      row.bagsSold,
-      row.tonsSold,
+      row.kgSold,
       row.averageOrderValue,
     ]),
   ].map((line) => line.map(escapeCsvValue).join(',')).join('\n');
@@ -80,9 +79,18 @@ const requestReport = async (dates) => {
 };
 
 const getOrderDate = (order) => {
-  const value = typeof order.createdAt?.toDate === 'function' ? order.createdAt.toDate() : new Date(order.createdAt);
+  if (!order.deliveryDate) return null;
+  const value = new Date(`${order.deliveryDate}T00:00:00`);
   if (Number.isNaN(value.getTime())) return null;
-  return toDateInputValue(value);
+  return order.deliveryDate;
+};
+
+const getItemWeightKg = (item) => {
+  const storedWeight = Number(item?.weightKg);
+  if (storedWeight > 0) return storedWeight;
+
+  const nameWeight = String(item?.name || item?.productName || '').match(/(\d+(?:\.\d+)?)\s*kg\b/i);
+  return nameWeight ? Number(nameWeight[1]) : 0;
 };
 
 const buildFirestoreReport = async (dates) => {
@@ -94,20 +102,18 @@ const buildFirestoreReport = async (dates) => {
     const paymentStatus = String(order.paymentStatus || '').toLowerCase();
     const status = String(order.status || '').toLowerCase();
     const date = getOrderDate(order);
-    const isPaid = ['paid', 'delivered', 'completed'].includes(paymentStatus)
-      || ['processing', 'delivered', 'completed', 'finished'].includes(status);
+    const isDelivered = status === 'delivered' || paymentStatus === 'delivered';
     const isRejected = paymentStatus === 'rejected' || status === 'cancelled' || status === 'rejected';
 
-    if (!date || date < dates.startDate || date > dates.endDate || !isPaid || isRejected) return;
+    if (!date || date < dates.startDate || date > dates.endDate || !isDelivered || isRejected) return;
 
-    const current = daily.get(date) || { date, orders: 0, grossRevenue: 0, netSales: 0, bagsSold: 0, tonsSold: 0, averageOrderValue: 0 };
+    const current = daily.get(date) || { date, orders: 0, grossRevenue: 0, netSales: 0, kgSold: 0, averageOrderValue: 0 };
     const total = Number(order.total || 0);
-    const bagsSold = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const kgSold = (order.items || []).reduce((sum, item) => sum + (getItemWeightKg(item) * Number(item.quantity || 0)), 0);
     current.orders += 1;
     current.grossRevenue += total;
     current.netSales += total;
-    current.bagsSold += bagsSold;
-    current.tonsSold += bagsSold / 1000;
+    current.kgSold += kgSold;
     daily.set(date, current);
   });
 
@@ -118,10 +124,9 @@ const buildFirestoreReport = async (dates) => {
   const summary = dailyRows.reduce((result, row) => ({
     grossRevenue: result.grossRevenue + row.grossRevenue,
     netSales: result.netSales + row.netSales,
-    bagsSold: result.bagsSold + row.bagsSold,
-    tonsSold: result.tonsSold + row.tonsSold,
+    kgSold: result.kgSold + row.kgSold,
     orderCount: result.orderCount + row.orders,
-  }), { grossRevenue: 0, netSales: 0, bagsSold: 0, tonsSold: 0, orderCount: 0 });
+  }), { grossRevenue: 0, netSales: 0, kgSold: 0, orderCount: 0 });
 
   return {
     startDate: dates.startDate,
@@ -254,7 +259,7 @@ export default function RevenueReports({ userRole }) {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Gross Revenue" value={formatCurrency(summary.grossRevenue)} detail="Before discounts and adjustments" />
           <MetricCard label="Net Sales" value={formatCurrency(summary.netSales)} detail="After discounts and adjustments" />
-          <MetricCard label="Volume Sold" value={`${formatNumber(summary.bagsSold)} bags`} detail={`${formatNumber(summary.tonsSold, 2)} tons`} />
+          <MetricCard label="Volume Sold" value={`${formatNumber(summary.kgSold)} kg`} detail="Total ice weight scheduled for delivery" />
           <MetricCard label="Average Order Value" value={formatCurrency(summary.averageOrderValue)} detail={`${formatNumber(summary.orderCount)} paid orders`} />
         </div>
 
@@ -275,7 +280,7 @@ export default function RevenueReports({ userRole }) {
         <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 p-5"><h2 className="text-lg font-bold text-slate-900">Daily breakdown</h2><span className="text-sm text-slate-500">{dailyRows.length} days</span></div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm"><thead className="border-y border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Date</th><th className="px-5 py-3 font-semibold">Orders</th><th className="px-5 py-3 font-semibold">Gross Revenue</th><th className="px-5 py-3 font-semibold">Net Sales</th><th className="px-5 py-3 font-semibold">Bags</th><th className="px-5 py-3 font-semibold">Tons</th><th className="px-5 py-3 font-semibold">AOV</th></tr></thead><tbody className="divide-y divide-slate-100">{dailyRows.map((row) => <tr key={row.date} className="text-slate-700"><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-900">{formatDateLabel(row.date)}</td><td className="px-5 py-3">{formatNumber(row.orders)}</td><td className="px-5 py-3">{formatCurrency(row.grossRevenue)}</td><td className="px-5 py-3 font-semibold">{formatCurrency(row.netSales)}</td><td className="px-5 py-3">{formatNumber(row.bagsSold)}</td><td className="px-5 py-3">{formatNumber(row.tonsSold, 2)}</td><td className="px-5 py-3">{formatCurrency(row.averageOrderValue)}</td></tr>)}</tbody></table>
+            <table className="min-w-full text-left text-sm"><thead className="border-y border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Delivery Date</th><th className="px-5 py-3 font-semibold">Orders</th><th className="px-5 py-3 font-semibold">Gross Revenue</th><th className="px-5 py-3 font-semibold">Net Sales</th><th className="px-5 py-3 font-semibold">Kilograms</th><th className="px-5 py-3 font-semibold">AOV</th></tr></thead><tbody className="divide-y divide-slate-100">{dailyRows.map((row) => <tr key={row.date} className="text-slate-700"><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-900">{formatDateLabel(row.date)}</td><td className="px-5 py-3">{formatNumber(row.orders)}</td><td className="px-5 py-3">{formatCurrency(row.grossRevenue)}</td><td className="px-5 py-3 font-semibold">{formatCurrency(row.netSales)}</td><td className="px-5 py-3">{formatNumber(row.kgSold)}</td><td className="px-5 py-3">{formatCurrency(row.averageOrderValue)}</td></tr>)}</tbody></table>
           </div>
         </section>
       </>}
