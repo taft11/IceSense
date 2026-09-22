@@ -7,6 +7,7 @@ export default function HeaderNav({
   onToggleAccountMenu,
   onSelectAccountSection,
   onOpenCart,
+  notifications,
   cartItemCount,
   cartButtonRef,
   isCartAnimating,
@@ -41,6 +42,7 @@ export default function HeaderNav({
           >
             My Orders
           </button>
+          {notifications}
           <button
             type="button"
             onClick={onOpenCart}

@@ -13,6 +13,7 @@ import OrderHistoryView from './components/OrderHistoryView';
 import AccountView from './components/AccountView';
 import CartSidebar from './components/CartSidebar';
 import PendingOrderConfirmationModal from './components/PendingOrderConfirmationModal';
+import CustomerNotifications from './components/CustomerNotifications';
 import { getMissingProfileFields } from './utils/profileValidation';
 
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
@@ -1192,6 +1193,13 @@ export default function CustomerPortal() {
         onToggleAccountMenu={handleToggleAccountMenu}
         onSelectAccountSection={handleSelectAccountSection}
         onOpenCart={() => setIsCartOpen(true)}
+        notifications={(
+          <CustomerNotifications
+            orders={orders}
+            userId={activeUserId}
+            onViewOrders={() => handleViewChange('orders')}
+          />
+        )}
         cartItemCount={cartItemCount}
         cartButtonRef={cartButtonRef}
         isCartAnimating={Boolean(flyToCart)}

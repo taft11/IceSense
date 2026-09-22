@@ -20,6 +20,15 @@ const ORDERS_PER_PAGE = 5;
 
 const isOrderActive = (status) => !['Delivered', 'Cancelled'].includes(status || 'Placed');
 
+const getDisplayStatus = (status) => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  if (['attempting', 'out for delivery', 'in transit', 'on the way'].includes(normalizedStatus)) {
+    return 'Out for Delivery';
+  }
+
+  return status || 'Placed';
+};
+
 const formatDate = (value) => {
   const date = typeof value?.toMillis === 'function' ? value.toDate() : new Date(value || 0);
   if (Number.isNaN(date.getTime())) return 'Unknown date';
@@ -123,7 +132,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
       ) : (
         <div className="space-y-4">
           {paginatedOrders.map((order) => {
-            const displayStatus = order.status || 'Placed';
+            const displayStatus = getDisplayStatus(order.status);
             const orderDate = formatDate(order.createdAt);
             const deliveryDate = formatReadableDate(order.deliveryDate);
             const deliveryTimeSlot = order.deliveryTimeSlot || order.deliverySlot || 'Not selected';
