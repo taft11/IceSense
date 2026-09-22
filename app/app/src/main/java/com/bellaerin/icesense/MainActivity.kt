@@ -1,11 +1,11 @@
 package com.bellaerin.icesense
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,28 +27,42 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import com.bellaerin.icesense.model.Delivery
-import com.bellaerin.icesense.model.User
 import com.bellaerin.icesense.ui.components.BellaErinLogo
 import com.bellaerin.icesense.ui.screens.AboutUsScreen
 import com.bellaerin.icesense.ui.screens.DeliveryListScreen
 import com.bellaerin.icesense.ui.screens.EditProfileScreen
 import com.bellaerin.icesense.ui.screens.LoginScreen
 import com.bellaerin.icesense.ui.theme.IceSenseTheme
+import com.bellaerin.icesense.ui.viewmodels.DeliveryViewModel
 import com.bellaerin.icesense.utils.uploadProofImage
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreSettings
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: DeliveryViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Enable Local Offline Storage Caching & Resiliency
+        try {
+            val firestore = FirebaseFirestore.getInstance()
+            val settings = FirebaseFirestoreSettings.Builder()
+                .setPersistenceEnabled(true)
+                .build()
+            firestore.firestoreSettings = settings
+        } catch (e: Exception) {
+            // Already initialized settings (or fallback gracefully)
+        }
+
+        viewModel.initAuthCheck()
+
         setContent {
             val context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("theme_prefs", MODE_PRIVATE) }
@@ -58,7 +72,10 @@ class MainActivity : ComponentActivity() {
             }
 
             IceSenseTheme(darkTheme = isDarkMode) {
-                DeliveryApp(isDarkMode = isDarkMode) {
+                DeliveryApp(
+                    viewModel = viewModel,
+                    isDarkMode = isDarkMode
+                ) {
                     isDarkMode = !isDarkMode
                     prefs.edit { putBoolean("is_dark_mode", isDarkMode) }
                 }
@@ -69,197 +86,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DeliveryApp(
+    viewModel: DeliveryViewModel,
     isDarkMode: Boolean,
     onThemeToggle: () -> Unit,
 ) {
-    val auth = remember { FirebaseAuth.getInstance() }
-    var currentScreen by remember { mutableStateOf("splash") }
-    var currentUserProfile by remember { mutableStateOf<User?>(null) }
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val firestore = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
     var isUploading by remember { mutableStateOf(value = false) }
 
-    fun fetchUserProfile(uid: String, email: String) {
-        firestore.collection("users").document(uid)
-            .get().addOnSuccessListener { document ->
-                val role = document.getString("role") ?: ""
-                val name = document.getString("name") ?: "Driver"
-                val contactNumber = document.getString("contactNumber") ?: ""
-                currentUserProfile = User(uid, email, role, name, contactNumber)
-                currentScreen = if (role == "driver") {
-                    "list"
-                } else {
-                    auth.signOut()
-                    "login"
-                }
-            }.addOnFailureListener {
-                auth.signOut()
-                currentScreen = "login"
-            }
-    }
-
-    // Check role if user is already logged in
-    LaunchedEffect(Unit) {
-        val user = auth.currentUser
-        if (user != null) {
-            fetchUserProfile(user.uid, user.email ?: "")
-        } else {
-            currentScreen = "login"
-        }
-    }
-    
-    // Real-time deliveries from Firestore
-    var deliveries by remember { mutableStateOf(listOf<Delivery>()) }
-
-    LaunchedEffect(currentScreen) {
-        if ((currentScreen == "list") || (currentScreen == "splash")) {
-            firestore.collection("orders")
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) return@addSnapshotListener
-                    if (snapshot != null) {
-                        val orderDocs = snapshot.documents
-                        if (orderDocs.isEmpty()) {
-                            deliveries = emptyList()
-                            return@addSnapshotListener
-                        }
-
-                        // Show orders when they are "Processing", "Delivered", "Pending", or "pending"
-                        // AND they are assigned to the current driver
-                        val visibleStatuses = listOf("Processing", "Delivered", "Pending", "pending")
-                        val currentDriverId = auth.currentUser?.uid
-
-                        val filteredDocs = orderDocs.filter { 
-                            val status = it.getString("status") ?: ""
-                            val assignedDriverId = it.getString("assignedDriverId")
-
-                            (status in visibleStatuses) && (assignedDriverId == currentDriverId)
-                        }
-
-                        if (filteredDocs.isEmpty()) {
-                            deliveries = emptyList()
-                            return@addSnapshotListener
-                        }
-
-                        val newDeliveriesMap = mutableMapOf<String, Delivery>()
-                        var fetchedCount = 0
-
-                        filteredDocs.forEach { doc ->
-                            val userId = doc.getString("userId")
-                            val proofImageUrl = doc.getString("proofImageUrl")
-                            val status = doc.getString("status") ?: ""
-                            val deliveryTimeSlot = doc.getString("deliveryTimeSlot")
-                            val deliveredAt = doc.getTimestamp("deliveredAt")?.toDate()?.time
-                            val deliveryDate: Long? = when (val rawDate = doc.get("deliveryDate")) {
-                                is Timestamp -> rawDate.toDate().time
-                                is Number -> rawDate.toLong()
-                                is String -> {
-                                    rawDate.toLongOrNull() ?: try {
-                                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(rawDate)?.time
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                }
-                                else -> null
-                            } ?: when (val rawCreated = doc.get("createdAt")) {
-                                is Timestamp -> rawCreated.toDate().time
-                                is Number -> rawCreated.toLong()
-                                else -> null
-                            }
-
-                            if (userId != null) {
-                                Log.d("IceSense", "Fetching user $userId for order ${doc.id}")
-                                firestore.collection("users").document(userId)
-                                    .get().addOnSuccessListener { userDoc ->
-                                        if (!userDoc.exists()) {
-                                            Log.e("IceSense", "User document $userId does not exist!")
-                                        }
-
-                                        val firstName = userDoc.getString("firstName") ?: ""
-                                        val lastName = userDoc.getString("lastName") ?: ""
-                                        val customerName = "$firstName $lastName".trim().ifEmpty { "Customer" }
-                                        val phoneNumber = userDoc.getString("phoneNumber")
-                                        val contactNumber = userDoc.getString("contactNumber") ?: doc.getString("contactNumber")
-
-                                        val defaultAddressId = userDoc.getString("defaultAddressId")
-                                        @Suppress("UNCHECKED_CAST")
-                                        val addresses = userDoc["addresses"] as? List<Map<String, Any>>
-                                        
-                                        Log.d("IceSense", "User $customerName has ${addresses?.size ?: 0} addresses. Default ID: $defaultAddressId")
-
-                                        // Try to find the default address, fallback to the first one if not found
-                                        val addr = addresses?.find { it["id"] == defaultAddressId } 
-                                            ?: addresses?.firstOrNull()
-                                        
-                                        if (addr == null) {
-                                            Log.w("IceSense", "No address found for user $userId")
-                                        } else {
-                                            Log.d("IceSense", "Found address: ${addr["street"]}, ID matched: ${addr["id"] == defaultAddressId}")
-                                        }
-                                        
-                                        val street = (addr?.get("street") as? String) ?: ""
-                                        val city = addr?.get("city") as? String ?: ""
-                                        val state = addr?.get("state") as? String ?: ""
-                                        val fullAddress = listOf(street, city, state)
-                                            .asSequence()
-                                            .filter { it.isNotBlank() }
-                                            .joinToString(", ")
-                                        
-                                        val lat = when(val l = addr?.get("latitude")) {
-                                            is Double -> l
-                                            is Number -> l.toDouble()
-                                            else -> 0.0
-                                        }
-                                        val lng = when(val l = addr?.get("longitude")) {
-                                            is Double -> l
-                                            is Number -> l.toDouble()
-                                            else -> 0.0
-                                        }
-
-                                        newDeliveriesMap[doc.id] = Delivery(
-                                            id = doc.id,
-                                            customerName = customerName,
-                                            address = fullAddress.ifEmpty { "No Address" },
-                                            latitude = lat,
-                                            longitude = lng,
-                                            status = status,
-                                            isConfirmed = status == "Delivered",
-                                            proofImageUrl = proofImageUrl,
-                                            deliverySlot = deliveryTimeSlot,
-                                            phoneNumber = phoneNumber,
-                                            contactNumber = contactNumber,
-                                            deliveredAt = deliveredAt,
-                                            deliveryDate = deliveryDate,
-                                        )
-
-                                        fetchedCount++
-                                        if (fetchedCount == filteredDocs.size) {
-                                            deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
-                                        }
-                                    }.addOnFailureListener { e ->
-                                        Log.e("IceSense", "Error fetching user $userId", e)
-                                        fetchedCount++
-                                        if (fetchedCount == filteredDocs.size) {
-                                            deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
-                                        }
-                                    }
-                            } else {
-                                Log.w("IceSense", "Order ${doc.id} has no userId")
-                                fetchedCount++
-                                if (fetchedCount == filteredDocs.size) {
-                                    deliveries = filteredDocs.mapNotNull { newDeliveriesMap[it.id] }
-                                }
-                            }
-                        }
-                    }
-                }
-        }
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = currentScreen != "login" && currentScreen != "splash",
+        gesturesEnabled = viewModel.currentScreen != "login" && viewModel.currentScreen != "splash",
         drawerContent = {
             ModalDrawerSheet {
                 // Drawer Header
@@ -272,16 +111,16 @@ fun DeliveryApp(
                     BellaErinLogo(iconSize = 64.dp, showText = false)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = currentUserProfile?.name ?: "Driver",
+                        text = viewModel.currentUserProfile?.name ?: "Driver",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = currentUserProfile?.email ?: "",
+                        text = viewModel.currentUserProfile?.email ?: "",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
-                    currentUserProfile?.contactNumber?.let {
+                    viewModel.currentUserProfile?.contactNumber?.let {
                         if (it.isNotBlank()) {
                             Text(
                                 text = it,
@@ -297,9 +136,9 @@ fun DeliveryApp(
                 // Navigation Items
                 NavigationDrawerItem(
                     label = { Text("Home") },
-                    selected = currentScreen == "list",
+                    selected = viewModel.currentScreen == "list",
                     onClick = {
-                        currentScreen = "list"
+                        viewModel.currentScreen = "list"
                         scope.launch { drawerState.close() }
                     },
                     icon = { Icon(Icons.Default.Home, contentDescription = null) },
@@ -308,9 +147,9 @@ fun DeliveryApp(
 
                 NavigationDrawerItem(
                     label = { Text("Edit Profile") },
-                    selected = currentScreen == "edit_profile",
+                    selected = viewModel.currentScreen == "edit_profile",
                     onClick = {
-                        currentScreen = "edit_profile"
+                        viewModel.currentScreen = "edit_profile"
                         scope.launch { drawerState.close() }
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = null) },
@@ -319,9 +158,9 @@ fun DeliveryApp(
 
                 NavigationDrawerItem(
                     label = { Text("About Us") },
-                    selected = currentScreen == "about",
+                    selected = viewModel.currentScreen == "about",
                     onClick = {
-                        currentScreen = "about"
+                        viewModel.currentScreen = "about"
                         scope.launch { drawerState.close() }
                     },
                     icon = { Icon(Icons.Default.Info, contentDescription = null) },
@@ -362,9 +201,7 @@ fun DeliveryApp(
                     onClick = {
                         scope.launch {
                             drawerState.close()
-                            auth.signOut()
-                            currentUserProfile = null
-                            currentScreen = "login"
+                            viewModel.logout()
                         }
                     },
                     icon = { 
@@ -382,19 +219,20 @@ fun DeliveryApp(
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
-                when (currentScreen) {
+                when (viewModel.currentScreen) {
                     "splash" -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
                     }
                     "login" -> LoginScreen {
-                        auth.currentUser?.let { user ->
-                            fetchUserProfile(user.uid, user.email ?: "")
+                        FirebaseAuth.getInstance().currentUser?.let { user ->
+                            viewModel.fetchUserProfile(user.uid, user.email ?: "")
                         }
                     }
                     "list" -> DeliveryListScreen(
-                        deliveries = deliveries,
+                        deliveries = viewModel.deliveries,
+                        isLoading = viewModel.isLoadingDeliveries,
                         onConfirm = { id, proofUri ->
                             if (proofUri != null) {
                                 scope.launch {
@@ -422,7 +260,6 @@ fun DeliveryApp(
                                     }
                                 }
                             } else {
-                                // No photo confirm (if allowed)
                                 firestore.collection("orders").document(id)
                                     .update(
                                         "isConfirmed", true,
@@ -442,22 +279,32 @@ fun DeliveryApp(
                                 .addOnFailureListener {
                                     Toast.makeText(context, "Failed to reschedule", Toast.LENGTH_SHORT).show()
                                 }
+                        },
+                        onStartDelivery = { id ->
+                            viewModel.startDelivery(id, 
+                                onSuccess = {
+                                    Toast.makeText(context, "Delivery started!", Toast.LENGTH_SHORT).show()
+                                },
+                                onFailure = {
+                                    Toast.makeText(context, "Failed to start delivery", Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         }
                     ) {
                         scope.launch { drawerState.open() }
                     }
                     "edit_profile" -> EditProfileScreen(
-                        uid = currentUserProfile?.uid ?: "",
-                        currentName = currentUserProfile?.name ?: "",
-                        currentContactNumber = currentUserProfile?.contactNumber ?: "",
-                        userEmail = currentUserProfile?.email ?: "",
+                        uid = viewModel.currentUserProfile?.uid ?: "",
+                        currentName = viewModel.currentUserProfile?.name ?: "",
+                        currentContactNumber = viewModel.currentUserProfile?.contactNumber ?: "",
+                        userEmail = viewModel.currentUserProfile?.email ?: "",
                         onProfileUpdated = { newName, newContact ->
-                            currentUserProfile = currentUserProfile?.copy(name = newName, contactNumber = newContact)
+                            viewModel.currentUserProfile = viewModel.currentUserProfile?.copy(name = newName, contactNumber = newContact)
                         },
-                        onBack = { currentScreen = "list" }
+                        onBack = { viewModel.currentScreen = "list" }
                     )
                     "about" -> AboutUsScreen(
-                        onBack = { currentScreen = "list" }
+                        onBack = { viewModel.currentScreen = "list" }
                     )
                 }
             }
