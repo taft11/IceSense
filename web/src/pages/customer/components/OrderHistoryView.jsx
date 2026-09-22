@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ReceiptText, Truck } from 'lucide-react';
+import OrderDetails from './OrderDetails';
+import OrderProgress from './OrderProgress';
 
 const STATUS_BADGE_STYLES = {
   Placed: 'bg-amber-100 text-amber-800',
@@ -18,7 +20,25 @@ const FILTER_OPTIONS = [
 
 const ORDERS_PER_PAGE = 5;
 
-const isOrderActive = (status) => !['Delivered', 'Cancelled'].includes(status || 'Placed');
+const normalizeStatus = (status) => String(status || '').trim().toLowerCase().replace(/_/g, ' ');
+
+const isCompletedOrder = (order) => {
+  const status = normalizeStatus(order.status);
+  const paymentStatus = normalizeStatus(order.paymentStatus);
+
+  return [
+    'delivered',
+    'completed',
+    'done',
+    'finished',
+    'picked up',
+    'cancelled',
+    'rejected',
+    'failed',
+  ].includes(status) || ['cancelled', 'rejected', 'failed'].includes(paymentStatus);
+};
+
+const isOrderActive = (order) => !isCompletedOrder(order);
 
 const formatDate = (value) => {
   const date = typeof value?.toMillis === 'function' ? value.toDate() : new Date(value || 0);
@@ -52,11 +72,11 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
 
   const filteredOrders = useMemo(() => {
     if (activeFilter === 'active') {
-      return orders.filter((order) => isOrderActive(order.status));
+      return orders.filter((order) => isOrderActive(order));
     }
 
     if (activeFilter === 'completed') {
-      return orders.filter((order) => !isOrderActive(order.status));
+      return orders.filter((order) => isCompletedOrder(order));
     }
 
     return orders;
@@ -127,6 +147,10 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
             const orderDate = formatDate(order.createdAt);
             const deliveryDate = formatReadableDate(order.deliveryDate);
             const deliveryTimeSlot = order.deliveryTimeSlot || order.deliverySlot || 'Not selected';
+            const fulfillmentLabel = String(order.fulfillmentMethod || order.deliveryType || '').toLowerCase().includes('pickup')
+              ? 'Pickup'
+              : 'Delivery';
+            const showInlineDetails = isOrderActive(order);
 
             return (
               <div
@@ -160,7 +184,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="inline-flex items-center gap-2 text-sky-700">
                         <Truck className="h-4 w-4" />
-                        <span className="font-semibold">Target Delivery</span>
+                        <span className="font-semibold">Target {fulfillmentLabel}</span>
                       </div>
                       <div className="text-sm text-slate-700">
                         <span>{deliveryDate}</span>
@@ -169,6 +193,10 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                       </div>
                     </div>
                   </div>
+
+                  {(showInlineDetails || expandedOrderId === order.id) && (
+                    <OrderProgress order={order} />
+                  )}
 
                   <div className="mt-4 divide-y divide-slate-100 rounded-2xl bg-slate-50">
                     {(expandedItemsOrderId === order.id ? order.items || [] : (order.items || []).slice(0, 2)).map((item, index) => {
@@ -217,19 +245,22 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
-                      className="inline-flex items-center justify-center rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        View Details
-                        <ChevronDown
-                          className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`}
-                        />
-                      </span>
-                    </button>
-
+                    {showInlineDetails ? (
+                      <p className="text-sm font-semibold text-slate-600">Order details</p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
+                        className="inline-flex items-center justify-center rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          View Details
+                          <ChevronDown
+                            className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`}
+                          />
+                        </span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onReorder?.(order)}
@@ -240,23 +271,8 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                   </div>
                 </div>
 
-                {expandedOrderId === order.id && (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div>
-                        <p className="font-semibold text-gray-900">Shipping Address</p>
-                        <p className="mt-1 text-gray-600">{order.shippingAddress || 'Not provided'}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Landmark</p>
-                        <p className="mt-1 text-gray-600">{order.landmark || 'Not provided'}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Payment Method</p>
-                        <p className="mt-1 text-gray-600">{order.paymentMethod || 'Cash on Delivery'}</p>
-                      </div>
-                    </div>
-                  </div>
+                {(showInlineDetails || expandedOrderId === order.id) && (
+                  <OrderDetails order={order} />
                 )}
               </div>
             );

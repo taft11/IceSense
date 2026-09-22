@@ -321,6 +321,8 @@ export default function Deliveries() {
   };
 
   const filteredOrders = orders.filter((order) => {
+    const fulfillmentMethod = String(order?.fulfillmentMethod || order?.deliveryType || '').toLowerCase();
+    if (fulfillmentMethod.includes('pickup')) return false;
     if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
     if (activeFilter === 'unassigned') return !order.assignedDriverId;
