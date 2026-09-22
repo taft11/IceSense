@@ -13,6 +13,7 @@ export default function Orders({
   pendingOrders,
   processingOrders,
   deliveredOrders,
+  failedOrders,
   cancelledOrders,
   ordersPage,
   totalOrderPages,
@@ -32,10 +33,11 @@ export default function Orders({
   const [lightboxImage, setLightboxImage] = useState(null);
 
   const filterOptions = [
-    { key: 'all', label: 'All', count: pendingOrders + processingOrders + deliveredOrders + cancelledOrders },
+    { key: 'all', label: 'All', count: pendingOrders + processingOrders + deliveredOrders + failedOrders + cancelledOrders },
     { key: 'pending_payment', label: 'Pending Verification', count: pendingOrders },
     { key: 'processing', label: 'Processing', count: processingOrders },
     { key: 'delivered', label: 'Delivered', count: deliveredOrders },
+    { key: 'failed', label: 'Failed', count: failedOrders },
     { key: 'cancelled', label: 'Cancelled', count: cancelledOrders },
   ];
 
@@ -81,6 +83,10 @@ export default function Orders({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
+
+    if (normalizedStatus === 'failed' || paymentStatus === 'failed') {
+      return { label: 'Failed', className: 'bg-orange-100 text-orange-700' };
+    }
 
     if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
       return { label: 'Cancelled', className: 'bg-red-100 text-red-700' };

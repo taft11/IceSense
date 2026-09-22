@@ -66,6 +66,7 @@ export default function Login() {
           lastName: lastName.trim(),
           email: userCredential.user.email || email,
           contactNumber: sanitizedPhoneNumber,
+          role: 'customer',
           createdAt: serverTimestamp(),
         }, { merge: true });
         navigate('/portal');
