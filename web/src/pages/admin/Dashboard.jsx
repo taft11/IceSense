@@ -88,11 +88,16 @@ export default function AdminDashboard() {
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
 
     if (
+      normalizedStatus === 'failed'
+      || paymentStatus === 'failed'
+    ) {
+      return 'failed';
+    }
+
+    if (
       normalizedStatus === 'cancelled'
       || normalizedStatus === 'rejected'
-      || normalizedStatus === 'failed'
       || paymentStatus === 'rejected'
-      || paymentStatus === 'failed'
     ) {
       return 'cancelled';
     }
@@ -173,6 +178,9 @@ export default function AdminDashboard() {
       if (activeOrderFilter === 'delivered') {
         return getOrderStatusKey(order) === 'delivered';
       }
+      if (activeOrderFilter === 'failed') {
+        return getOrderStatusKey(order) === 'failed';
+      }
       if (activeOrderFilter === 'cancelled') {
         return getOrderStatusKey(order) === 'cancelled';
       }
@@ -191,6 +199,7 @@ export default function AdminDashboard() {
   const pendingOrderItems = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment');
   const processingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'processing').length;
   const deliveredOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'delivered').length;
+  const failedOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'failed').length;
   const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
   const completedOrders = processingOrders + deliveredOrders;
   const unassignedDeliveries = allOrders.filter((order) => !order.assignedDriverId).length;
@@ -525,6 +534,7 @@ export default function AdminDashboard() {
                   pendingOrders={pendingOrders}
                   processingOrders={processingOrders}
                   deliveredOrders={deliveredOrders}
+                  failedOrders={failedOrders}
                   cancelledOrders={cancelledOrders}
                   completedOrders={completedOrders}
                   ordersPage={safeOrdersPage}
