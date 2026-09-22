@@ -30,8 +30,13 @@ export default function OrderDetails({ order, onTrackLive }) {
           <p className="mt-1 text-sm text-slate-600">
             {order.deliveryDate || 'Date not selected'} · {deliveryWindow}
           </p>
-          <p className="mt-3 text-sm text-slate-600">
-            {isDelivery ? formatAddress(order) : 'Ice plant pickup location'}
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {isDelivery ? 'Delivery address' : 'Pickup location'}
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            {isDelivery
+              ? formatAddress(order)
+              : 'Block 63, Lot 4 Anubing St, Amparo Subdivision, Barangay 179, Caloocan City North, Metro Manila, Philippines'}
           </p>
         </div>
 

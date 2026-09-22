@@ -86,6 +86,7 @@ export default function AdminDashboard() {
   const getOrderStatusKey = (order) => {
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
+    const pickupStatus = (order.pickupStatus || '').toLowerCase();
 
     if (
       normalizedStatus === 'failed'
@@ -125,9 +126,11 @@ export default function AdminDashboard() {
       normalizedStatus === 'done' ||
       normalizedStatus === 'finished' ||
       normalizedStatus === 'delivery completed' ||
-      paymentStatus === 'delivered'
+      paymentStatus === 'delivered' ||
+      normalizedStatus === 'picked up' ||
+      pickupStatus === 'picked up'
     ) {
-      return 'delivered';
+      return 'completed';
     }
 
     if (normalizedStatus === 'processing' || paymentStatus === 'paid') {
@@ -175,8 +178,8 @@ export default function AdminDashboard() {
       if (activeOrderFilter === 'processing') {
         return getOrderStatusKey(order) === 'processing';
       }
-      if (activeOrderFilter === 'delivered') {
-        return getOrderStatusKey(order) === 'delivered';
+      if (activeOrderFilter === 'completed') {
+        return getOrderStatusKey(order) === 'completed';
       }
       if (activeOrderFilter === 'failed') {
         return getOrderStatusKey(order) === 'failed';
@@ -198,11 +201,18 @@ export default function AdminDashboard() {
   const pendingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment').length;
   const pendingOrderItems = allOrders.filter((order) => getOrderStatusKey(order) === 'pending_payment');
   const processingOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'processing').length;
-  const deliveredOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'delivered').length;
+  const completedOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'completed').length;
   const failedOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'failed').length;
   const cancelledOrders = allOrders.filter((order) => getOrderStatusKey(order) === 'cancelled').length;
-  const completedOrders = processingOrders + deliveredOrders;
-  const unassignedDeliveries = allOrders.filter((order) => !order.assignedDriverId).length;
+  const unassignedDeliveries = allOrders.filter((order) => {
+    const fulfillmentMethod = String(order?.fulfillment_type || order?.fulfillmentMethod || order?.deliveryType || '').toLowerCase();
+    const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
+    const isDeliveryOrder = !fulfillmentMethod.includes('pickup');
+    const isReadyForDelivery = order?.readyForDelivery === true
+      || ['paid', 'approved', 'payment_verified'].includes(paymentStatus);
+
+    return isDeliveryOrder && isReadyForDelivery && !order.assignedDriverId;
+  }).length;
   const todaysOrdersCount = allOrders.filter((order) => {
     const orderDate = getOrderDateValue(order) || (order?.createdAt ? toLocalDateKey(order.createdAt?.toDate?.() || order.createdAt) : null);
     const todayDateKey = toLocalDateKey(new Date());
@@ -458,7 +468,7 @@ export default function AdminDashboard() {
           <ul className="space-y-1.5">
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/overview" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'overview' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Overview</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Orders</span><span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{pendingOrders || 3}</span></Link></li>
-            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Deliveries</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Fulfillment</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
             {userRole === 'owner' && <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/revenue-reports" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'revenue-reports' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Revenue Reports</Link></li>}
@@ -491,7 +501,7 @@ export default function AdminDashboard() {
             </li>
             <li>
               <Link to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Deliveries</span>
+                <span>Fulfillment</span>
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                   {unassignedDeliveries}
                 </span>
@@ -533,10 +543,9 @@ export default function AdminDashboard() {
                   paginatedOrders={paginatedOrders}
                   pendingOrders={pendingOrders}
                   processingOrders={processingOrders}
-                  deliveredOrders={deliveredOrders}
+                  completedOrders={completedOrders}
                   failedOrders={failedOrders}
                   cancelledOrders={cancelledOrders}
-                  completedOrders={completedOrders}
                   ordersPage={safeOrdersPage}
                   totalOrderPages={totalOrderPages}
                   setOrdersPage={setOrdersPage}

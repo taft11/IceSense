@@ -12,7 +12,7 @@ export default function Orders({
   paginatedOrders,
   pendingOrders,
   processingOrders,
-  deliveredOrders,
+  completedOrders,
   failedOrders,
   cancelledOrders,
   ordersPage,
@@ -33,10 +33,10 @@ export default function Orders({
   const [lightboxImage, setLightboxImage] = useState(null);
 
   const filterOptions = [
-    { key: 'all', label: 'All', count: pendingOrders + processingOrders + deliveredOrders + failedOrders + cancelledOrders },
+    { key: 'all', label: 'All', count: pendingOrders + processingOrders + completedOrders + failedOrders + cancelledOrders },
     { key: 'pending_payment', label: 'Pending Verification', count: pendingOrders },
     { key: 'processing', label: 'Processing', count: processingOrders },
-    { key: 'delivered', label: 'Delivered', count: deliveredOrders },
+    { key: 'completed', label: 'Completed', count: completedOrders },
     { key: 'failed', label: 'Failed', count: failedOrders },
     { key: 'cancelled', label: 'Cancelled', count: cancelledOrders },
   ];
@@ -93,14 +93,15 @@ export default function Orders({
     }
 
     if (
-      normalizedStatus === 'delivered' ||
-      normalizedStatus === 'completed' ||
-      normalizedStatus === 'done' ||
-      normalizedStatus === 'finished' ||
-      normalizedStatus === 'delivery completed' ||
-      paymentStatus === 'delivered'
+      normalizedStatus === 'picked up'
+      || normalizedStatus === 'delivered'
+      || normalizedStatus === 'completed'
+      || normalizedStatus === 'done'
+      || normalizedStatus === 'finished'
+      || normalizedStatus === 'delivery completed'
+      || paymentStatus === 'delivered'
     ) {
-      return { label: 'Delivered', className: 'bg-green-100 text-green-700' };
+      return { label: normalizedStatus === 'picked up' ? 'Picked Up' : 'Delivered', className: 'bg-green-100 text-green-700' };
     }
 
     if ((paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') && isPastOrder) {

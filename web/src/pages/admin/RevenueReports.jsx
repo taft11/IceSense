@@ -101,11 +101,15 @@ const buildFirestoreReport = async (dates) => {
     const order = orderSnapshot.data();
     const paymentStatus = String(order.paymentStatus || '').toLowerCase();
     const status = String(order.status || '').toLowerCase();
+    const pickupStatus = String(order.pickupStatus || '').toLowerCase();
     const date = getOrderDate(order);
-    const isDelivered = status === 'delivered' || paymentStatus === 'delivered';
+    const isCompleted = status === 'delivered'
+      || paymentStatus === 'delivered'
+      || status === 'picked up'
+      || pickupStatus === 'picked up';
     const isRejected = paymentStatus === 'rejected' || status === 'cancelled' || status === 'rejected';
 
-    if (!date || date < dates.startDate || date > dates.endDate || !isDelivered || isRejected) return;
+    if (!date || date < dates.startDate || date > dates.endDate || !isCompleted || isRejected) return;
 
     const current = daily.get(date) || { date, orders: 0, grossRevenue: 0, netSales: 0, kgSold: 0, averageOrderValue: 0 };
     const total = Number(order.total || 0);

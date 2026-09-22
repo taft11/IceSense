@@ -65,7 +65,7 @@ const getItemImage = (item) => {
 };
 
 export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder }) {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('active');
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [expandedItemsOrderId, setExpandedItemsOrderId] = useState(null);
