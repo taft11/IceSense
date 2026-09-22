@@ -11,6 +11,7 @@ import { restoreCancelledOrderStock } from './orderStock';
 import Inventory from './Inventory';
 import Deliveries from './Deliveries';
 import DemandForecastPage from './DemandForecastPage';
+import RevenueReports from './RevenueReports';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ export default function AdminDashboard() {
     ? 'deliveries'
     : location.pathname.includes('/forecast')
     ? 'forecast'
+    : location.pathname.includes('/revenue-reports')
+    ? 'revenue-reports'
     : 'overview';
   const isOrdersSectionActive = activeView === 'orders' || activeView === 'deliveries';
   const [iotData, setIotData] = useState({
@@ -46,6 +49,7 @@ export default function AdminDashboard() {
   const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
   const [activeDateFilter, setActiveDateFilter] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userRole, setUserRole] = useState(null);
 
   const ORDERS_PER_PAGE = 10;
 
@@ -83,7 +87,13 @@ export default function AdminDashboard() {
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
 
-    if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected' || paymentStatus === 'rejected') {
+    if (
+      normalizedStatus === 'cancelled'
+      || normalizedStatus === 'rejected'
+      || normalizedStatus === 'failed'
+      || paymentStatus === 'rejected'
+      || paymentStatus === 'failed'
+    ) {
       return 'cancelled';
     }
 
@@ -258,21 +268,29 @@ export default function AdminDashboard() {
         return;
       }
 
+      let normalizedRole;
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         const role = userDoc.exists() ? userDoc.data()?.role : null;
 
-        if (role !== 'admin') {
+        normalizedRole = String(role || '').toLowerCase();
+        if (!['admin', 'owner'].includes(normalizedRole)) {
           await signOut(auth);
           navigate('/admin-login', { replace: true });
           return;
         }
 
+        setUserRole(normalizedRole);
         setAdminUid(user.uid);
       } catch (error) {
         console.error('Unable to verify admin access', error);
         await signOut(auth);
         navigate('/admin-login', { replace: true });
+        return;
+      }
+
+      if (!['admin', 'owner'].includes(normalizedRole)) {
+        setOrdersLoading(false);
         return;
       }
 
@@ -434,6 +452,7 @@ export default function AdminDashboard() {
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Deliveries</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
+            {userRole === 'owner' && <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/revenue-reports" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'revenue-reports' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Revenue Reports</Link></li>}
           </ul>
         </nav>
         <button onClick={handleSignOut} className="w-full rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Sign out</button>
@@ -479,6 +498,7 @@ export default function AdminDashboard() {
                 <span>Predictive Analysis</span>
               </Link>
             </li>
+            {userRole === 'owner' && <li><Link to="/admin/revenue-reports" className={`flex w-full rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'revenue-reports' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>Revenue Reports</Link></li>}
           </ul>
         </nav>
 
@@ -525,6 +545,7 @@ export default function AdminDashboard() {
             <Route path="inventory" element={<Inventory />} />
             <Route path="deliveries" element={<Deliveries />} />
             <Route path="forecast" element={<DemandForecastPage />} />
+            <Route path="revenue-reports" element={<RevenueReports userRole={userRole} />} />
             <Route path="*" element={<Overview iotData={iotData} todayDate={todayDate} />} />
           </Routes>
         </div>

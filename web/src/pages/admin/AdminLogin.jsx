@@ -23,7 +23,7 @@ export default function AdminLogin() {
       const userDoc = await getDoc(doc(db, 'users', credentials.user.uid));
       const role = userDoc.exists() ? userDoc.data()?.role : null;
 
-      if (role !== 'admin') {
+      if (!['admin', 'owner'].includes(String(role).toLowerCase())) {
         await auth.signOut();
         throw new Error('ADMIN_ROLE_REQUIRED');
       }

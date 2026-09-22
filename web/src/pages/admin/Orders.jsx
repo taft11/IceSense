@@ -82,7 +82,12 @@ export default function Orders({
     today.setHours(0, 0, 0, 0);
     const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
 
-    if (normalizedStatus === 'cancelled' || normalizedStatus === 'rejected') {
+    if (
+      normalizedStatus === 'cancelled'
+      || normalizedStatus === 'rejected'
+      || normalizedStatus === 'failed'
+      || paymentStatus === 'failed'
+    ) {
       return { label: 'Cancelled', className: 'bg-red-100 text-red-700' };
     }
 
