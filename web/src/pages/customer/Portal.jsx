@@ -322,6 +322,10 @@ export default function CustomerPortal() {
     const savedSettings = getStoredDeliverySettings();
     return savedSettings?.deliverySlot || DELIVERY_TIME_SLOTS[0].id;
   });
+  const [fulfillmentMethod, setFulfillmentMethod] = useState(() => {
+    const savedSettings = getStoredDeliverySettings();
+    return savedSettings?.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery';
+  });
   const [isDeliveryExpanded, setIsDeliveryExpanded] = useState(false);
   const [isCheckoutConfirmOpen, setIsCheckoutConfirmOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
@@ -407,10 +411,11 @@ export default function CustomerPortal() {
         JSON.stringify({
           deliveryDate,
           deliverySlot,
+          fulfillmentMethod,
         })
       );
     }
-  }, [deliveryDate, deliverySlot]);
+  }, [deliveryDate, deliverySlot, fulfillmentMethod]);
 
   const getRemainingStockForProduct = (productId) => {
     const currentCartQty = cartItems
@@ -778,7 +783,7 @@ export default function CustomerPortal() {
       return;
     }
 
-    if (!hasSavedAddress) {
+    if (fulfillmentMethod === 'delivery' && !hasSavedAddress) {
       redirectToAddressSetup();
       return;
     }
@@ -796,7 +801,9 @@ export default function CustomerPortal() {
     const fullName = getFullName();
     const normalizedDeliveryDate = deliveryDate || toDateInputValue(earliestDeliveryDate);
     const normalizedDeliverySlot = DELIVERY_TIME_SLOTS.find((slot) => slot.id === deliverySlot)?.label || DELIVERY_TIME_SLOTS[0].label;
-    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+    const defaultAddress = fulfillmentMethod === 'delivery'
+      ? addresses.find((address) => address.isDefault) || addresses[0] || null
+      : null;
     const shippingAddress = defaultAddress
       ? `${defaultAddress.street || ''}, ${defaultAddress.city || ''}, ${defaultAddress.state || ''} ${defaultAddress.postalCode || ''}`.replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim()
       : 'Address not provided yet';
@@ -832,6 +839,7 @@ export default function CustomerPortal() {
         status: 'Pending Payment Verification',
         paymentMethod,
         paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+        fulfillmentMethod,
         readyForDelivery: false,
         receiptUrl,
         paymentReferenceNumber: receiptReferenceNumber.trim(),
@@ -899,7 +907,7 @@ export default function CustomerPortal() {
       return;
     }
 
-    if (!hasSavedAddress) {
+    if (fulfillmentMethod === 'delivery' && !hasSavedAddress) {
       redirectToAddressSetup();
       return;
     }
@@ -1308,6 +1316,8 @@ export default function CustomerPortal() {
         }}
         getRemainingStock={getRemainingStockForProduct}
         deliveryDate={deliveryDate}
+        fulfillmentMethod={fulfillmentMethod}
+        onFulfillmentMethodChange={setFulfillmentMethod}
         onDeliveryDateChange={setDeliveryDate}
         deliverySlot={deliverySlot}
         onDeliverySlotChange={setDeliverySlot}
@@ -1318,7 +1328,7 @@ export default function CustomerPortal() {
         isDeliveryExpanded={isDeliveryExpanded}
         onToggleDelivery={() => setIsDeliveryExpanded((prev) => !prev)}
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
-        hasAddress={hasSavedAddress}
+        hasAddress={hasSavedAddress || fulfillmentMethod === 'pickup'}
         receiptFile={receiptFile}
         receiptReferenceNumber={receiptReferenceNumber}
         detectedReceiptReferenceNumber={detectedReceiptReferenceNumber}

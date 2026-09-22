@@ -14,6 +14,8 @@ export default function CartSidebar({
   onConfirmCheckout,
   onCancelCheckout,
   getRemainingStock,
+  fulfillmentMethod,
+  onFulfillmentMethodChange,
   deliveryDate,
   onDeliveryDateChange,
   deliverySlot,
@@ -72,7 +74,7 @@ export default function CartSidebar({
                   <p className="mt-1 font-semibold text-gray-900">₱{cartSubtotal.toFixed(2)}</p>
                 </div>
                 <div className="pl-2">
-                  <span>Delivery</span>
+                  <span>{fulfillmentMethod === 'pickup' ? 'Pickup' : 'Delivery'}</span>
                   <p className="mt-1 truncate font-semibold text-gray-900">{deliveryDateHeading}</p>
                 </div>
               </div>
@@ -282,7 +284,7 @@ export default function CartSidebar({
           >
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-[#4091c9]" />
-              <span className="text-sm font-semibold text-gray-800">Delivery details</span>
+              <span className="text-sm font-semibold text-gray-800">{fulfillmentMethod === 'pickup' ? 'Pickup details' : 'Delivery details'}</span>
             </div>
             <span className="text-xs font-medium text-gray-500">{isDeliveryExpanded ? 'Hide' : 'Select'}</span>
           </button>
@@ -290,16 +292,44 @@ export default function CartSidebar({
           {!isDeliveryExpanded ? (
             <div className="mb-4 rounded-2xl bg-white px-3 py-2 text-sm text-gray-700 shadow-sm">
               <span className="font-semibold text-gray-900">{deliveryDateHeading}</span>
-              <span className="ml-2 text-gray-500">Delivery slot selected</span>
+              <span className="ml-2 text-gray-500">{fulfillmentMethod === 'pickup' ? 'Pickup slot selected' : 'Delivery slot selected'}</span>
             </div>
           ) : (
             <>
+              <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
+                <div className="mb-3 text-sm font-semibold text-gray-800">Fulfillment method</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'delivery', label: 'Delivery' },
+                    { id: 'pickup', label: 'Pickup' },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => onFulfillmentMethodChange(option.id)}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+                        fulfillmentMethod === option.id
+                          ? 'border-[#4091c9] bg-[#4091c9] text-white'
+                          : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  {fulfillmentMethod === 'pickup'
+                    ? 'Collect your order from the ice plant at the selected time.'
+                    : 'Your order will be delivered to your saved address.'}
+                </p>
+              </div>
+
               <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                   <p>
-                    Orders placed before 8:00 PM are eligible for next-day delivery. After 8:00 PM, next-day delivery closes,
-                    so the earliest available date becomes the day after tomorrow.
+                    Orders placed before 8:00 PM are eligible for the next available date. After 8:00 PM, the earliest
+                    available date becomes the day after tomorrow.
                   </p>
                 </div>
               </div>
@@ -307,7 +337,7 @@ export default function CartSidebar({
               <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <CalendarDays className="h-4 w-4 text-[#4091c9]" />
-                  Delivery Date
+                  {fulfillmentMethod === 'pickup' ? 'Pickup Date' : 'Delivery Date'}
                 </div>
 
                 <div className="mb-3 flex flex-wrap gap-2">
@@ -369,7 +399,7 @@ export default function CartSidebar({
               </div>
 
               <div className="mb-4 rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
-                Selected delivery: <span className="font-semibold text-gray-900">{deliveryDateHeading}</span>
+                Selected {fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery'}: <span className="font-semibold text-gray-900">{deliveryDateHeading}</span>
               </div>
             </>
           )}
