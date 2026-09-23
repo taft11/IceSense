@@ -1,11 +1,21 @@
 {
   "rules": {
     ".read": "auth != null",
-    ".write": "auth != null && auth.token.admin === true",
+    "IoT": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.admin === true || auth.token.email === 'marelynflorento@gmail.com')"
+    },
     "inventory": {
-      ".validate": "newData.hasChildren(['scale_1'])",
       "scale_1": {
-        ".validate": "newData.hasChildren(['tube_ice', 'crushed_ice'])"
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.admin === true || auth.token.email === 'marelynflorento@gmail.com')",
+        "$section": {
+          "sacks_breakdown": {
+            "$stockKey": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            }
+          }
+        }
       }
     }
   }

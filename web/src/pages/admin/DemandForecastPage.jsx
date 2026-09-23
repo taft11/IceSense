@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   AlertTriangle, 
   CalendarDays, 
@@ -9,8 +10,7 @@ import {
   ShieldAlert, 
   Thermometer, 
   TrendingUp, 
-  Truck, 
-  Zap 
+  Truck 
 } from 'lucide-react';
 import { 
   Area, 
@@ -39,9 +39,43 @@ const formatForecastDate = (date) => {
 };
 
 // Custom Recharts Tooltip
+const driverTagClass = {
+  weather: 'border-sky-200 bg-sky-50 text-sky-700',
+  calendar: 'border-amber-200 bg-amber-50 text-amber-700',
+  local: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  operations: 'border-slate-200 bg-slate-50 text-slate-700',
+};
+
+const insightStatusClass = {
+  positive: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  warning: 'border-amber-200 bg-amber-50 text-amber-700',
+  neutral: 'border-slate-200 bg-slate-100 text-slate-600',
+};
+
+const getDriverStatus = (driver) => {
+  if (driver?.status) return driver.status;
+  if (Number(driver?.impactPercent) < 0) return 'warning';
+  if (Number(driver?.impactPercent) >= 15) return 'positive';
+  return 'neutral';
+};
+
+const DriverTags = ({ drivers = [] }) => (
+  <div className="flex flex-wrap gap-1.5">
+    {drivers.map((driver) => (
+      <span
+        key={`${driver.label}-${driver.impactPercent}`}
+        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${driverTagClass[driver.type] || driverTagClass.operations}`}
+      >
+        {driver.label} {driver.impactPercent !== 0 ? `(${driver.impactPercent > 0 ? '+' : ''}${driver.impactPercent}%)` : ''}
+      </span>
+    ))}
+  </div>
+);
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
-    const forecastDate = payload[0]?.payload?.date;
+    const day = payload[0]?.payload;
+    const forecastDate = day?.date;
 
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-xs space-y-2">
@@ -57,6 +91,12 @@ const CustomTooltip = ({ active, payload, label }) => {
             <span className="font-bold text-slate-900">{formatKg(entry.value)}</span>
           </div>
         ))}
+        {day?.drivers?.length > 0 && (
+          <div className="border-t border-slate-100 pt-2">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Drivers</p>
+            <DriverTags drivers={day.drivers} />
+          </div>
+        )}
       </div>
     );
   }
@@ -65,6 +105,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function DemandForecastPage() {
   const { forecastDays = [], loading, error, todayForecast, tomorrowForecast } = useDemandForecast();
+  const [hoveredDate, setHoveredDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
 
   // Prepare chart data
   const chartData = forecastDays.map((day) => ({
@@ -72,7 +114,46 @@ export default function DemandForecastPage() {
     date: day.date,
     'Historical Production': Math.round(day.total_kg_produced || 0),
     'Predicted Demand': Math.round(day.total_kg_demanded || 0),
+    drivers: day.drivers || [],
   }));
+
+  const focusedDate = hoveredDate || selectedDate;
+  const selectedDay = forecastDays.find((day) => day.date === selectedDate);
+  const demandValues = forecastDays.map((day) => Number(day.total_kg_demanded || 0));
+  const peakDemand = demandValues.length ? Math.max(...demandValues) : 0;
+  const valleyDemand = demandValues.length ? Math.min(...demandValues) : 0;
+  const insightItems = forecastDays.map((day) => {
+    const leadDriver = [...(day.drivers || [])].sort((firstDriver, secondDriver) => (
+      Math.abs(Number(secondDriver.impactPercent || 0)) - Math.abs(Number(firstDriver.impactPercent || 0))
+    ))[0];
+    const demand = Number(day.total_kg_demanded || 0);
+    const trend = demand === peakDemand ? 'Peak' : demand === valleyDemand ? 'Valley' : 'Steady';
+    const status = getDriverStatus(leadDriver);
+    return {
+      ...day,
+      trend,
+      status,
+      statusLabel: status === 'positive' ? 'Spike' : status === 'warning' ? 'Watch' : 'Baseline',
+      narrative: leadDriver?.message
+        ? `${trend} day. ${leadDriver.message}.`
+        : `${trend} day. Demand is tracking the recent production pattern.`,
+    };
+  });
+  const keyWeeklyHighlight = insightItems.reduce((highlight, item) => {
+    if (!highlight) return item;
+
+    const itemImpact = Math.max(...(item.drivers || []).map((driver) => Math.abs(Number(driver.impactPercent || 0))), 0);
+    const highlightImpact = Math.max(...(highlight.drivers || []).map((driver) => Math.abs(Number(driver.impactPercent || 0))), 0);
+    const itemIsPeak = item.total_kg_demanded >= peakDemand;
+    const highlightIsPeak = highlight.total_kg_demanded >= peakDemand;
+    const itemScore = itemImpact + (itemIsPeak ? 10 : 0);
+    const highlightScore = highlightImpact + (highlightIsPeak ? 10 : 0);
+
+    return itemScore > highlightScore ? item : highlight;
+  }, null);
+  const displayedInsight = selectedDay
+    ? insightItems.find((item) => item.date === selectedDay.date)
+    : keyWeeklyHighlight;
 
   // Forecast Metrics
   const breakdown = todayForecast?.breakdown || {};
@@ -127,9 +208,6 @@ export default function DemandForecastPage() {
       <div className="rounded-[28px] border border-gray-200 bg-white p-6 sm:p-8 text-slate-900 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#c7d9f5] bg-[#eff6ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#0f172a]">
-              <Zap className="h-3.5 w-3.5 text-[#4091c9]" /> AI Demand Engine
-            </div>
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-slate-900">
               Today's Operational Forecast
             </h1>
@@ -231,7 +309,16 @@ export default function DemandForecastPage() {
 
             <div className="h-72 w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                  onMouseMove={(state) => setHoveredDate(state?.activePayload?.[0]?.payload?.date || null)}
+                  onMouseLeave={() => setHoveredDate(null)}
+                  onClick={(state) => {
+                    const date = state?.activePayload?.[0]?.payload?.date;
+                    if (date) setSelectedDate(date);
+                  }}
+                >
                   <CartesianGrid stroke="#e2e8f0" vertical={false} />
                   <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
@@ -256,16 +343,67 @@ export default function DemandForecastPage() {
                     stroke="#f59e0b"
                     strokeWidth={3}
                     strokeDasharray="5 5"
-                    dot={{ r: 5, fill: '#f59e0b' }}
+                    dot={(dotProps) => {
+                      const isFocused = focusedDate === dotProps.payload.date;
+                      return (
+                        <circle
+                          {...dotProps}
+                          className={isFocused ? 'forecast-point-pulse' : ''}
+                          r={isFocused ? 8 : 5}
+                          fill={isFocused ? '#0f766e' : '#f59e0b'}
+                          stroke={isFocused ? '#ccfbf1' : '#fff'}
+                          strokeWidth={isFocused ? 4 : 2}
+                        />
+                      );
+                    }}
                   />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700 flex items-center justify-between">
-            <span className="font-semibold">Insight:</span>
-            <span>Dashed line signifies AI target orders derived from ambient temp, rain risk, and payday calendars.</span>
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="font-bold tracking-tight text-slate-900">Key Weekly Highlight</span>
+              <span className="text-[10px] font-medium text-slate-400">
+                {selectedDay ? 'Selected day' : 'Highest-impact day'}
+              </span>
+            </div>
+
+            <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+              {insightItems.map((item) => (
+                <button
+                  key={item.date}
+                  type="button"
+                  onClick={() => setSelectedDate(item.date)}
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-indigo-300 ${displayedInsight?.date === item.date ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700'}`}
+                  aria-pressed={displayedInsight?.date === item.date}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            {displayedInsight && (
+              <div className="rounded-lg border border-white bg-white p-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${insightStatusClass[displayedInsight.status]}`}>
+                      {displayedInsight.statusLabel}
+                    </span>
+                    <strong className="text-xs font-bold text-slate-900">{formatForecastDate(displayedInsight.date)}</strong>
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">{displayedInsight.trend}</span>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-slate-600">{displayedInsight.narrative}</p>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                  <DriverTags drivers={displayedInsight.drivers} />
+                  <span className="whitespace-nowrap text-[10px] font-bold text-slate-500">
+                    {formatKg(displayedInsight.total_kg_demanded)} projected
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
