@@ -163,7 +163,12 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
               : 'Delivery';
             const showInlineDetails = isOrderActive(order);
             const isTrackingOpen = trackingOrderId === order.id;
-            const canTrack = fulfillmentLabel === 'Delivery' && showInlineDetails;
+            const isOutForDelivery = [order.status, order.deliveryStatus]
+              .map(normalizeStatus)
+              .some((value) => ['out for delivery', 'in transit', 'on the way', 'attempting'].includes(value));
+            const canTrack = fulfillmentLabel === 'Delivery'
+              && showInlineDetails
+              && isOutForDelivery;
 
             return (
               <div
@@ -183,6 +188,16 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                       >
                         {displayStatus}
                       </span>
+                      {canTrack && (
+                        <button
+                          type="button"
+                          onClick={() => setTrackingOrderId((previous) => (previous === order.id ? null : order.id))}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-[#205a82] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#164666]"
+                        >
+                          <MapPinned className="h-3.5 w-3.5" />
+                          {isTrackingOpen ? 'Hide map' : 'Track delivery'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">

@@ -37,7 +37,7 @@ export default function DeliveryMap({ order, isOpen = false }) {
   const destinationKey = destination ? `${destination.latitude},${destination.longitude}` : '';
   const startKey = routeStart ? `${routeStart.latitude},${routeStart.longitude}` : '';
   const status = String(order?.deliveryStatus || order?.status || '').toLowerCase().replace(/_/g, ' ');
-  const trackingStarted = Boolean(order?.deliveryStartedAt || order?.deliveryOrigin || liveStatuses.includes(status));
+  const trackingStarted = liveStatuses.includes(status);
   const trackingVisible = isOpen || trackingStarted;
 
   useEffect(() => {
