@@ -28,16 +28,19 @@ export default function DeliveryMap({ order, isOpen = false }) {
   const [geocodedDestination, setGeocodedDestination] = useState(null);
   const destinationLatitude = order?.deliveryLatitude ?? order?.deliveryLocation?.latitude;
   const destinationLongitude = order?.deliveryLongitude ?? order?.deliveryLocation?.longitude;
+  const driverLatitude = order?.driverLocation?.latitude;
+  const driverLongitude = order?.driverLocation?.longitude;
   const originLatitude = order?.deliveryOrigin?.latitude;
   const originLongitude = order?.deliveryOrigin?.longitude;
   const savedDestination = useMemo(() => toCoordinate(destinationLatitude, destinationLongitude), [destinationLatitude, destinationLongitude]);
   const destination = savedDestination || geocodedDestination;
+  const driverLocation = useMemo(() => toCoordinate(driverLatitude, driverLongitude), [driverLatitude, driverLongitude]);
   const origin = useMemo(() => toCoordinate(originLatitude, originLongitude), [originLatitude, originLongitude]);
-  const routeStart = origin;
+  const routeStart = driverLocation || origin;
   const destinationKey = destination ? `${destination.latitude},${destination.longitude}` : '';
   const startKey = routeStart ? `${routeStart.latitude},${routeStart.longitude}` : '';
   const status = String(order?.deliveryStatus || order?.status || '').toLowerCase().replace(/_/g, ' ');
-  const trackingStarted = liveStatuses.includes(status);
+  const trackingStarted = Boolean(order?.deliveryStartedAt || order?.driverLocation || order?.deliveryOrigin || liveStatuses.includes(status));
   const trackingVisible = isOpen || trackingStarted;
 
   useEffect(() => {
@@ -86,12 +89,12 @@ export default function DeliveryMap({ order, isOpen = false }) {
     if (!markersRef.current.destination) markersRef.current.destination = L.marker([destination.latitude, destination.longitude], { icon: icon('#e05252') }).addTo(map).bindTooltip('Customer address');
     else markersRef.current.destination.setLatLng([destination.latitude, destination.longitude]);
     if (routeStart) {
-      const label = 'Route origin';
+      const label = driverLocation ? 'Driver location' : 'Previous delivery location';
       if (!markersRef.current.start) markersRef.current.start = L.marker([routeStart.latitude, routeStart.longitude], { icon: icon('#4091c9') }).addTo(map).bindTooltip(label);
       else { markersRef.current.start.setLatLng([routeStart.latitude, routeStart.longitude]); markersRef.current.start.setTooltipContent(label); }
     }
     if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [28, 28], maxZoom: 15 });
-  }, [destination, destinationKey, routeStart, startKey, trackingVisible]);
+  }, [destination, destinationKey, driverLocation, routeStart, startKey, trackingVisible]);
 
   useEffect(() => {
     if (!mapRef.current || !routeStart || !destination || !trackingVisible) return undefined;
@@ -135,9 +138,9 @@ export default function DeliveryMap({ order, isOpen = false }) {
 
   return (
     <section className="mt-4 overflow-hidden rounded-2xl border border-sky-200 bg-white" aria-label="Live delivery map">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-100 bg-sky-50 px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><MapPinned className="h-4 w-4 text-[#4091c9]" /><span>Delivery route</span></div><a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#2d75aa] hover:underline">Open directions <ExternalLink className="h-3.5 w-3.5" /></a></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-100 bg-sky-50 px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><MapPinned className="h-4 w-4 text-[#4091c9]" /><span>{liveStatuses.includes(status) ? 'Live delivery tracking' : 'Delivery route'}</span>{liveStatuses.includes(status) && <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />}</div><a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#2d75aa] hover:underline">Open directions <ExternalLink className="h-3.5 w-3.5" /></a></div>
       <div ref={mapContainerRef} className="h-56 w-full" />
-      <div className="flex flex-wrap items-center gap-4 px-4 py-3 text-xs text-slate-600"><span className="inline-flex items-center gap-1.5"><Navigation className="h-3.5 w-3.5 text-[#4091c9]" />{routeStart ? 'Route origin saved' : 'Waiting for delivery start'}</span><span>{route ? `${(route.distance / 1000).toFixed(1)} km` : routeStart ? 'Calculating route' : 'Route starts when delivery begins'}</span><span>{route ? `${Math.max(1, Math.round(route.duration / 60))} min` : 'Please wait'}</span></div>
+      <div className="flex flex-wrap items-center gap-4 px-4 py-3 text-xs text-slate-600"><span className="inline-flex items-center gap-1.5"><Navigation className="h-3.5 w-3.5 text-[#4091c9]" />{driverLocation ? 'Driver position' : routeStart ? 'Previous delivery' : 'Waiting for driver GPS'}</span><span>{route ? `${(route.distance / 1000).toFixed(1)} km` : routeStart ? 'Calculating route' : 'Route starts when delivery begins'}</span><span>{route ? `${Math.max(1, Math.round(route.duration / 60))} min` : 'Please wait'}</span></div>
       {routeError && <p className="px-4 pb-3 text-xs text-amber-700">{routeError}</p>}
     </section>
   );
