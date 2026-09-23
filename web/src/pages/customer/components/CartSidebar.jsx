@@ -277,6 +277,34 @@ export default function CartSidebar({
         </div>
 
         <div className="border-t border-gray-200 bg-gray-50 px-6 py-5">
+          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="mb-3 text-sm font-semibold text-gray-800">Fulfillment method</div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'delivery', label: 'Delivery' },
+                { id: 'pickup', label: 'Pickup' },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onFulfillmentMethodChange(option.id)}
+                  className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+                    fulfillmentMethod === option.id
+                      ? 'border-[#4091c9] bg-[#4091c9] text-white'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {fulfillmentMethod === 'pickup'
+                ? 'Collect your order from the ice plant at the selected time.'
+                : 'Your order will be delivered to your saved address.'}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={onToggleDelivery}
@@ -296,34 +324,6 @@ export default function CartSidebar({
             </div>
           ) : (
             <>
-              <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="mb-3 text-sm font-semibold text-gray-800">Fulfillment method</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'delivery', label: 'Delivery' },
-                    { id: 'pickup', label: 'Pickup' },
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => onFulfillmentMethodChange(option.id)}
-                      className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-                        fulfillmentMethod === option.id
-                          ? 'border-[#4091c9] bg-[#4091c9] text-white'
-                          : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  {fulfillmentMethod === 'pickup'
-                    ? 'Collect your order from the ice plant at the selected time.'
-                    : 'Your order will be delivered to your saved address.'}
-                </p>
-              </div>
-
               <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />

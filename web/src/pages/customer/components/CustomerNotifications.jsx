@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, CircleCheck, PackageCheck } from 'lucide-react';
 
 const getStatusLabel = (order) => {
@@ -58,6 +58,20 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
     signatures: getStoredReadSignatures(storageKey),
   }));
   const [isOpen, setIsOpen] = useState(false);
+  const notificationsRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleOutsidePointerDown = (event) => {
+      if (!notificationsRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [isOpen]);
 
   const notifications = useMemo(() => orders.slice(0, 12).map((order) => {
     const statusLabel = getStatusLabel(order);
@@ -99,7 +113,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
   };
 
   return (
-    <div className="relative">
+    <div ref={notificationsRef} className="relative">
       <button
         type="button"
         onClick={() => setIsOpen((previous) => !previous)}

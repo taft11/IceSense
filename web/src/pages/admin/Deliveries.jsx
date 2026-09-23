@@ -388,9 +388,20 @@ export default function FulfillmentManagement() {
     return paymentStatus === 'paid' || paymentStatus === 'approved' || paymentStatus === 'payment_verified';
   };
 
+  const isPendingPaymentVerification = (order) => {
+    const status = String(order?.status || '').toLowerCase().replace(/_/g, ' ');
+    const paymentStatus = String(order?.paymentStatus || '').toLowerCase().replace(/_/g, ' ');
+    return [status, paymentStatus].some((value) => [
+      'pending',
+      'pending payment verification',
+      'awaiting verification',
+    ].includes(value));
+  };
+
   const filteredOrders = orders.filter((order) => {
     const fulfillmentMethod = String(order?.fulfillmentMethod || order?.deliveryType || '').toLowerCase();
     if (fulfillmentMethod.includes('pickup')) return false;
+    if (isPendingPaymentVerification(order)) return false;
     if (!isReadyForDelivery(order)) return false;
     if (activeFilter === 'assigned') return Boolean(order.assignedDriverId);
     if (activeFilter === 'unassigned') return !order.assignedDriverId;
@@ -445,6 +456,7 @@ export default function FulfillmentManagement() {
 
   const pickupOrders = orders
     .filter((order) => getFulfillmentMethod(order).includes('pickup'))
+    .filter((order) => !isPendingPaymentVerification(order))
     .filter((order) => pickupFilter === 'all' || getPickupStatus(order) === pickupFilter)
     .filter((order) => {
       const query = pickupSearchTerm.trim().toLowerCase();

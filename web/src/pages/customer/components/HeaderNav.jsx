@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ChevronDown, Info, LogOut, MapPin, ShoppingCart, ShieldCheck, UserCircle2 } from 'lucide-react';
 
 export default function HeaderNav({
@@ -14,6 +15,21 @@ export default function HeaderNav({
   onLogout,
   loggingOut,
 }) {
+  const accountMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+
+    const handleOutsidePointerDown = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        onToggleAccountMenu();
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [accountMenuOpen, onToggleAccountMenu]);
+
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
       <div className="customer-header mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -55,7 +71,7 @@ export default function HeaderNav({
               <span className="rounded-full bg-[#4091c9] px-2 py-0.5 text-xs font-semibold text-white">{cartItemCount}</span>
             )}
           </button>
-          <div className="relative">
+          <div ref={accountMenuRef} className="relative">
             <button
               type="button"
               onClick={onToggleAccountMenu}

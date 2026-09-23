@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
+const HISTORICAL_YEARS = 5;
+
 /**
  * @typedef {{ label: string, impactPercent: number, type?: 'weather' | 'calendar' | 'local' | 'operations', status?: 'positive' | 'warning' | 'neutral', message?: string }} ForecastDriver
  */
@@ -19,6 +21,18 @@ const addDays = (date, days) => {
   return nextDate;
 };
 
+const getHistoricalDateKeys = (date) => Array.from({ length: HISTORICAL_YEARS }, (_, index) => {
+  const historicalDate = new Date(date);
+  historicalDate.setFullYear(date.getFullYear() - index - 1);
+  return formatDateKey(historicalDate);
+});
+
+const getWeekendDemandMultiplier = (date) => {
+  if ([5, 6].includes(date.getDay())) return 1.45;
+  if (date.getDay() === 0) return 1.25;
+  return 1;
+};
+
 const normalizeDrivers = (data = {}, forecastDate) => {
   if (Array.isArray(data.drivers) && data.drivers.length > 0) {
     return data.drivers.map((driver) => ({
@@ -33,7 +47,7 @@ const normalizeDrivers = (data = {}, forecastDate) => {
   const drivers = [];
   const temperature = Number(data.avg_temperature_c ?? data.avgTemperatureC ?? 0);
   const rainProbability = Number(data.rain_probability ?? data.rainProbability ?? 0);
-  const isPaydayWeekend = Boolean(data.is_payday_weekend ?? data.isPaydayWeekend ?? false);
+  const isPayday = Boolean(data.is_payday_weekend ?? data.isPaydayWeekend ?? false);
   const eventTag = data.event_tag ?? data.eventTag ?? '';
   const dayOfWeek = forecastDate?.getDay();
 
@@ -49,10 +63,17 @@ const normalizeDrivers = (data = {}, forecastDate) => {
   if (rainProbability >= 50) {
     drivers.push({ label: 'Rain risk', impactPercent: -Math.round(rainProbability / 10), type: 'weather', status: 'warning', message: `${rainProbability}% rain chance may soften walk-in demand` });
   }
-  if (isPaydayWeekend) {
-    drivers.push({ label: 'Payday weekend', impactPercent: 25, type: 'calendar', status: 'positive', message: 'Payday weekend surge is lifting expected orders' });
+  if (isPayday) {
+    const isWeekend = [0, 5, 6].includes(dayOfWeek);
+    drivers.push({
+      label: isWeekend ? 'Payday weekend' : 'Payday',
+      impactPercent: 25,
+      type: 'calendar',
+      status: 'positive',
+      message: isWeekend ? 'Payday weekend surge is lifting expected orders' : 'Payday demand is lifting expected orders',
+    });
   }
-  if (eventTag && eventTag !== 'Normal Day' && !isPaydayWeekend) {
+  if (eventTag && eventTag !== 'Normal Day' && !isPayday) {
     const eventDetails = {
       'Christmas/New Year Peak': { impactPercent: 100, status: 'positive', message: 'Holiday gatherings are creating an exceptional seasonal demand peak' },
       'Halloween Gathering': { impactPercent: 40, status: 'positive', message: 'Halloween gatherings are adding a short seasonal demand spike' },
@@ -71,6 +92,9 @@ const normalizeDrivers = (data = {}, forecastDate) => {
 const getFallbackForecast = (dateKey, index = 0) => {
   const baseDemand = 720 + index * 40;
   const baseProduced = 610 + index * 30;
+  const fallbackDate = new Date(`${dateKey}T00:00:00`);
+  const weekendMultiplier = getWeekendDemandMultiplier(fallbackDate);
+  const isPayday = [14, 15, 16, 29, 30, 31].includes(fallbackDate.getDate());
   const scenarios = [
     { label: 'Baseline demand', impactPercent: 0, type: 'operations', status: 'neutral', message: 'Opening day is tracking close to the normal order curve' },
     { label: 'Payday weekend', impactPercent: 25, type: 'calendar', status: 'positive', message: 'Payday weekend surge is lifting expected orders' },
@@ -80,22 +104,24 @@ const getFallbackForecast = (dateKey, index = 0) => {
     { label: 'Baseline demand', impactPercent: 0, type: 'operations', status: 'neutral', message: 'Volume is settling back toward the normal order curve' },
     { label: 'Heatwave tailwind', impactPercent: 16, type: 'weather', status: 'positive', message: 'Lingering heat is keeping cooling demand elevated' },
   ];
-  const drivers = [scenarios[index % scenarios.length]];
+  const selectedScenario = scenarios[index % scenarios.length];
+  const drivers = [selectedScenario.label === 'Payday weekend' && !isPayday ? scenarios[0] : selectedScenario];
 
   return {
     date: dateKey,
-    total_kg_demanded: baseDemand,
+    total_kg_demanded: Math.round(baseDemand * weekendMultiplier),
     total_kg_produced: baseProduced,
     avg_temperature_c: 31 + index * 0.8,
-    is_payday_weekend: index === 1,
-    event_tag: index === 1 ? 'Payday weekend' : '',
+    is_payday_weekend: isPayday,
+    event_tag: isPayday ? 'Payday' : '',
     drivers,
     breakdown: {
-      bags_5kg: Math.round(baseDemand * 0.12),
-      sacks_35kg: Math.round(baseDemand * 0.3),
-      sacks_40kg: Math.round(baseDemand * 0.24),
-      sacks_50kg: Math.round(baseDemand * 0.18),
-      crates_70kg: Math.round(baseDemand * 0.16),
+      tube_5kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.60 * 0.20) / 5),
+      tube_35kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.60 * 0.45) / 35),
+      tube_50kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.60 * 0.35) / 50),
+      crushed_5kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.40 * 0.20) / 5),
+      crushed_35kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.40 * 0.45) / 35),
+      crushed_50kg_sacks: Math.round((baseDemand * weekendMultiplier * 0.40 * 0.35) / 50),
     },
   };
 };
@@ -109,27 +135,78 @@ const normalizeForecastData = (data = {}, forecastDate) => ({
   rain_probability: Number(data.rain_probability ?? data.rainProbability ?? 0),
   drivers: normalizeDrivers(data, forecastDate),
   breakdown: {
-    bags_5kg: Number(data.bags_5kg ?? data.breakdown?.bags_5kg ?? 0),
-    sacks_35kg: Number(data.sacks_35kg ?? data.breakdown?.sacks_35kg ?? 0),
-    sacks_40kg: Number(data.sacks_40kg ?? data.breakdown?.sacks_40kg ?? 0),
-    sacks_50kg: Number(data.sacks_50kg ?? data.breakdown?.sacks_50kg ?? 0),
-    crates_70kg: Number(data.crates_70kg ?? data.breakdown?.crates_70kg ?? 0),
+    tube_5kg_sacks: Number(data.tube_5kg_sacks ?? data.breakdown?.tube_5kg_sacks ?? 0),
+    tube_35kg_sacks: Number(data.tube_35kg_sacks ?? data.breakdown?.tube_35kg_sacks ?? 0),
+    tube_50kg_sacks: Number(data.tube_50kg_sacks ?? data.breakdown?.tube_50kg_sacks ?? 0),
+    crushed_5kg_sacks: Number(data.crushed_5kg_sacks ?? data.breakdown?.crushed_5kg_sacks ?? 0),
+    crushed_35kg_sacks: Number(data.crushed_35kg_sacks ?? data.breakdown?.crushed_35kg_sacks ?? 0),
+    crushed_50kg_sacks: Number(data.crushed_50kg_sacks ?? data.breakdown?.crushed_50kg_sacks ?? 0),
   },
 });
+
+const averageField = (records, field) => {
+  const values = records
+    .map((record) => Number(record[field]))
+    .filter((value) => Number.isFinite(value));
+
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+};
+
+const averageBreakdownField = (records, field) => averageField(
+  records.map((record) => record.breakdown || {}),
+  field
+);
+
+const getMostCommonEvent = (records) => {
+  const eventCounts = records.reduce((counts, record) => {
+    const event = String(record.event_tag ?? record.eventTag ?? '').trim();
+    if (event && event !== 'Normal Day') counts.set(event, (counts.get(event) || 0) + 1);
+    return counts;
+  }, new Map());
+
+  return [...eventCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '';
+};
+
+const aggregateHistoricalForecast = (records, forecastDate) => {
+  const normalizedRecords = records.map((record) => normalizeForecastData(record, forecastDate));
+  const weekendMultiplier = getWeekendDemandMultiplier(forecastDate);
+  const breakdownFields = [
+    'tube_5kg_sacks',
+    'tube_35kg_sacks',
+    'tube_50kg_sacks',
+    'crushed_5kg_sacks',
+    'crushed_35kg_sacks',
+    'crushed_50kg_sacks',
+  ];
+  const aggregated = {
+    total_kg_demanded: averageField(normalizedRecords, 'total_kg_demanded') * weekendMultiplier,
+    total_kg_produced: averageField(normalizedRecords, 'total_kg_produced'),
+    avg_temperature_c: averageField(normalizedRecords, 'avg_temperature_c'),
+    rain_probability: averageField(normalizedRecords, 'rain_probability'),
+    is_payday_weekend: normalizedRecords.filter((record) => record.is_payday_weekend).length >= Math.ceil(normalizedRecords.length / 2),
+    event_tag: getMostCommonEvent(records),
+    breakdown: Object.fromEntries(breakdownFields.map((field) => [field, Math.round(averageBreakdownField(normalizedRecords, field) * weekendMultiplier)])),
+  };
+
+  return {
+    ...aggregated,
+    drivers: normalizeDrivers(aggregated, forecastDate),
+  };
+};
 
 const findForecastWindow = async (baseDate, dayCount = 7) => {
   const startDate = new Date(baseDate);
   const displayDates = Array.from({ length: dayCount }, (_, index) => addDays(startDate, index));
-  const dataDates = displayDates.map((date) => addDays(date, -364));
 
   return Promise.all(
-    dataDates.map(async (dataDate, index) => {
-      const displayDate = displayDates[index];
+    displayDates.map(async (displayDate) => {
       const displayDateKey = formatDateKey(displayDate);
-      const dataDateKey = formatDateKey(dataDate);
-      const snapshot = await getDoc(doc(db, 'daily_analytics', dataDateKey));
+      const snapshots = await Promise.all(
+        getHistoricalDateKeys(displayDate).map((dateKey) => getDoc(doc(db, 'daily_analytics', dateKey)))
+      );
+      const historicalRecords = snapshots.filter((snapshot) => snapshot.exists()).map((snapshot) => snapshot.data());
 
-      if (!snapshot.exists()) {
+      if (historicalRecords.length === 0) {
         return {
           date: displayDateKey,
           label: displayDate.toLocaleDateString('en-US', { weekday: 'short' }),
@@ -137,11 +214,8 @@ const findForecastWindow = async (baseDate, dayCount = 7) => {
         };
       }
 
-      const docData = snapshot.data();
-      const normalized = normalizeForecastData(docData, displayDate);
-      const label = docData.day_of_week
-        ? String(docData.day_of_week).slice(0, 3)
-        : displayDate.toLocaleDateString('en-US', { weekday: 'short' });
+      const normalized = aggregateHistoricalForecast(historicalRecords, displayDate);
+      const label = displayDate.toLocaleDateString('en-US', { weekday: 'short' });
 
       return {
         date: displayDateKey,

@@ -66,7 +66,7 @@ const DriverTags = ({ drivers = [] }) => (
         key={`${driver.label}-${driver.impactPercent}`}
         className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${driverTagClass[driver.type] || driverTagClass.operations}`}
       >
-        {driver.label} {driver.impactPercent !== 0 ? `(${driver.impactPercent > 0 ? '+' : ''}${driver.impactPercent}%)` : ''}
+        {driver.label}
       </span>
     ))}
   </div>
@@ -173,11 +173,12 @@ export default function DemandForecastPage() {
   // NORMALIZED PACKAGING MIX BREAKDOWN (Fixes "Too Much" Issue)
   // -------------------------------------------------------------
   const bagTypesRaw = [
-    { label: '5kg Bags', count: breakdown.bags_5kg || 0, unitKg: 5, color: 'bg-sky-500', hex: '#0284c7' },
-    { label: '35kg Sacks', count: breakdown.sacks_35kg || 0, unitKg: 35, color: 'bg-indigo-500', hex: '#6366f1' },
-    { label: '40kg Sacks', count: breakdown.sacks_40kg || 0, unitKg: 40, color: 'bg-emerald-500', hex: '#10b981' },
-    { label: '50kg Sacks', count: breakdown.sacks_50kg || 0, unitKg: 50, color: 'bg-amber-500', hex: '#f59e0b' },
-    { label: '70kg Crates', count: breakdown.crates_70kg || 0, unitKg: 70, color: 'bg-rose-500', hex: '#f43f5e' },
+    { label: '5kg Tube Sacks', count: breakdown.tube_5kg_sacks || 0, unitKg: 5, color: 'bg-sky-500', hex: '#0284c7' },
+    { label: '35kg Tube Sacks', count: breakdown.tube_35kg_sacks || 0, unitKg: 35, color: 'bg-indigo-500', hex: '#6366f1' },
+    { label: '50kg Tube Sacks', count: breakdown.tube_50kg_sacks || 0, unitKg: 50, color: 'bg-emerald-500', hex: '#10b981' },
+    { label: '5kg Crushed Sacks', count: breakdown.crushed_5kg_sacks || 0, unitKg: 5, color: 'bg-amber-500', hex: '#f59e0b' },
+    { label: '35kg Crushed Sacks', count: breakdown.crushed_35kg_sacks || 0, unitKg: 35, color: 'bg-orange-500', hex: '#f97316' },
+    { label: '50kg Crushed Sacks', count: breakdown.crushed_50kg_sacks || 0, unitKg: 50, color: 'bg-rose-500', hex: '#f43f5e' },
   ];
 
   // Calculate actual total weight derived from unit breakdown
@@ -494,7 +495,7 @@ export default function DemandForecastPage() {
             Packaging & Bay Staging
           </div>
           <p className="mt-3 text-xs text-slate-600 leading-relaxed">
-            Pre-bag <strong>{(breakdown.bags_5kg || 0).toLocaleString()} units of 5kg bags</strong> and stage <strong>{(breakdown.sacks_50kg || 0).toLocaleString()} units of 50kg sacks</strong> in the primary loading bay for fast truck loading.
+              Stage <strong>{(breakdown.tube_50kg_sacks || 0).toLocaleString()} units of 50kg tube sacks</strong> and <strong>{(breakdown.crushed_50kg_sacks || 0).toLocaleString()} units of 50kg crushed sacks</strong> in the primary loading bay for fast truck loading.
           </p>
         </div>
 
