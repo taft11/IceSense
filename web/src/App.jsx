@@ -4,6 +4,7 @@ import CustomerPortal from './pages/customer/Portal';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminLogin from './pages/admin/AdminLogin';
 import Login from './pages/customer/Login';
+import DriverPortal from './pages/driver/DriverPortal';
 
 // We create a Layout component so we can use the useLocation hook
 function Layout() {
@@ -13,6 +14,7 @@ function Layout() {
   const isAdminLogin = location.pathname === '/admin-login';
   const isPortal = location.pathname.startsWith('/portal');
   const isAdmin = location.pathname.startsWith('/admin');
+  const isDriver = location.pathname.startsWith('/driver');
 
   return (
     <div className="min-h-screen flex flex-col font-sans relative overflow-x-hidden">
@@ -22,7 +24,7 @@ function Layout() {
         If on Home -> Transparent, floating on top of video. 
         If on other pages -> Solid white, sticky.
       */}
-      {!isLogin && !isAdminLogin && !isPortal && !isAdmin && (
+      {!isLogin && !isAdminLogin && !isPortal && !isAdmin && !isDriver && (
         <nav className={`site-nav w-full z-50 transition-all duration-300 ${isHome ? 'absolute top-0 bg-transparent' : 'sticky top-0 bg-white border-b border-gray-200 shadow-sm'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="site-nav-inner flex justify-between h-24">
@@ -59,6 +61,7 @@ function Layout() {
           <Route path="/login" element={<Login />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin/*" element={<AdminDashboard />} />
+          <Route path="/driver/*" element={<DriverPortal />} />
         </Routes>
       </main>
 

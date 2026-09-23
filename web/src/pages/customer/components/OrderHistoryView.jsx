@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ReceiptText, Truck } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, MapPinned, ReceiptText, Truck } from 'lucide-react';
 import OrderDetails from './OrderDetails';
 import OrderProgress from './OrderProgress';
 
@@ -78,6 +78,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [expandedItemsOrderId, setExpandedItemsOrderId] = useState(null);
+  const [trackingOrderId, setTrackingOrderId] = useState(null);
 
   const filteredOrders = useMemo(() => {
     if (activeFilter === 'active') {
@@ -103,6 +104,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
     setCurrentPage(1);
     setExpandedOrderId(null);
     setExpandedItemsOrderId(null);
+    setTrackingOrderId(null);
   };
 
   return (
@@ -160,6 +162,8 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
               ? 'Pickup'
               : 'Delivery';
             const showInlineDetails = isOrderActive(order);
+            const isTrackingOpen = trackingOrderId === order.id;
+            const canTrack = fulfillmentLabel === 'Delivery' && showInlineDetails;
 
             return (
               <div
@@ -254,22 +258,34 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    {showInlineDetails ? (
-                      <p className="text-sm font-semibold text-slate-600">Order details</p>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
-                        className="inline-flex items-center justify-center rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          View Details
-                          <ChevronDown
-                            className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`}
-                          />
-                        </span>
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {showInlineDetails ? (
+                        <p className="text-sm font-semibold text-slate-600">Order details</p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedOrderId((prev) => (prev === order.id ? null : order.id))}
+                          className="inline-flex items-center justify-center rounded-xl bg-[#4091c9] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            View Details
+                            <ChevronDown
+                              className={`h-4 w-4 transition ${expandedOrderId === order.id ? 'rotate-180' : ''}`}
+                            />
+                          </span>
+                        </button>
+                      )}
+                      {canTrack && (
+                        <button
+                          type="button"
+                          onClick={() => setTrackingOrderId((previous) => (previous === order.id ? null : order.id))}
+                          className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${isTrackingOpen ? 'bg-[#205a82] text-white' : 'border border-sky-200 bg-sky-50 text-[#205a82] hover:bg-sky-100'}`}
+                        >
+                          <MapPinned className="h-4 w-4" />
+                          {isTrackingOpen ? 'Hide Map' : 'Track Delivery'}
+                        </button>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => onReorder?.(order)}
@@ -281,7 +297,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                 </div>
 
                 {(showInlineDetails || expandedOrderId === order.id) && (
-                  <OrderDetails order={order} />
+                  <OrderDetails order={order} showTracking={isTrackingOpen} />
                 )}
               </div>
             );

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { sanitizePhoneNumberInput, getMissingProfileFields } from './utils/profileValidation';
@@ -38,8 +38,10 @@ export default function Login() {
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-        navigate('/portal');
+        const credentials = await signInWithEmailAndPassword(auth, email, password);
+        const profileSnapshot = await getDoc(doc(db, 'users', credentials.user.uid));
+        const role = String(profileSnapshot.data()?.role || '').toLowerCase();
+        navigate(['driver', 'delivery', 'deliverer'].includes(role) ? '/driver' : '/portal');
       } else {
         const sanitizedPhoneNumber = sanitizePhoneNumberInput(contactNumber);
         const { missing, invalid } = getMissingProfileFields({
