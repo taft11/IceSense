@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { LogOut, MapPin, Navigation, PackageCheck, Truck } from 'lucide-react';
@@ -9,6 +9,9 @@ const normalize = (value) => String(value || '').trim().toLowerCase().replace(/_
 const isDelivery = (order) => !normalize(order.fulfillmentMethod || order.fulfillment_type || order.deliveryType).includes('pickup');
 const isDelivered = (order) => ['delivered', 'completed', 'done', 'finished'].includes(normalize(order.status));
 const isReady = (order) => ['assigned', 'processing', 'order confirmed'].includes(normalize(order.deliveryStatus || order.status));
+const isOutForDelivery = (order) => [order?.status, order?.deliveryStatus]
+  .map(normalize)
+  .some((value) => ['out for delivery', 'in transit', 'on the way', 'attempting'].includes(value));
 const orderTime = (order) => order.createdAt?.toMillis?.() || 0;
 const toLocation = (position) => ({
   latitude: Number(position.coords.latitude.toFixed(6)),
@@ -55,13 +58,16 @@ export default function DriverPortal() {
   const activeOrder = useMemo(() => orders
     .filter((order) => isDelivery(order) && !isDelivered(order))
     .sort((a, b) => orderTime(a) - orderTime(b))[0], [orders]);
+  const activeOrderId = activeOrder?.id;
+  const activeOrderStatus = activeOrder?.status;
+  const activeOrderDeliveryStatus = activeOrder?.deliveryStatus;
 
-  const stopWatching = () => {
+  const stopWatching = useCallback(() => {
     if (watchIdRef.current != null) {
       navigator.geolocation?.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-  };
+  }, []);
 
   const updateDriverLocation = async (orderId, position) => {
     const location = toLocation(position);
@@ -71,18 +77,59 @@ export default function DriverPortal() {
     });
   };
 
-  const startWatching = (order) => {
-    if (!navigator.geolocation) throw new Error('This device does not support GPS location.');
+  const startWatching = useCallback((order) => {
+    if (!window.isSecureContext) {
+      setLocationMessage('GPS requires HTTPS. Open the deployed HTTPS site on the mobile phone.');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationMessage('This mobile browser does not support GPS location.');
+      return;
+    }
+
+    stopWatching();
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => updateDriverLocation(order.id, position).catch(() => setError('Live location could not be updated.')),
-      (positionError) => setLocationMessage(positionError.code === 1 ? 'Allow location access so customers can see your route.' : 'Your live location is temporarily unavailable.'),
+      (positionError) => {
+        const messages = {
+          1: 'Location permission was denied. Enable Location for this browser in phone settings.',
+          2: 'The phone could not determine its location. Turn on GPS and try again.',
+          3: 'GPS timed out. Check phone location settings and try again.',
+        };
+        setLocationMessage(messages[positionError.code] || 'Your live location is temporarily unavailable.');
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
-  };
+  }, [stopWatching]);
+
+  useEffect(() => {
+    const resumeGps = () => {
+      const currentOrder = {
+        id: activeOrderId,
+        status: activeOrderStatus,
+        deliveryStatus: activeOrderDeliveryStatus,
+      };
+      if (currentOrder.id && isOutForDelivery(currentOrder)) {
+        startWatching(currentOrder);
+      } else {
+        stopWatching();
+      }
+    };
+    const resumeTimer = window.setTimeout(resumeGps, 0);
+    return () => {
+      window.clearTimeout(resumeTimer);
+      stopWatching();
+    };
+  }, [activeOrderId, activeOrderStatus, activeOrderDeliveryStatus, startWatching, stopWatching]);
 
   const handleStartDelivery = () => {
     if (!activeOrder || !navigator.geolocation) {
       setError('This device does not support GPS location.');
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      setLocationMessage('GPS requires HTTPS. Open the deployed HTTPS site on the mobile phone.');
       return;
     }
 
@@ -111,8 +158,13 @@ export default function DriverPortal() {
       } finally {
         setSavingOrderId(null);
       }
-    }, () => {
-      setLocationMessage('Allow location access to start delivery and show the customer your route.');
+    }, (positionError) => {
+      const messages = {
+        1: 'Location permission was denied. Enable Location for this browser in phone settings.',
+        2: 'The phone could not determine its location. Turn on GPS and try again.',
+        3: 'GPS timed out. Check phone location settings and try again.',
+      };
+      setLocationMessage(messages[positionError.code] || 'Unable to get the phone location.');
       setSavingOrderId(null);
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
   };
@@ -137,8 +189,13 @@ export default function DriverPortal() {
       } finally {
         setSavingOrderId(null);
       }
-    }, () => {
-      setError('Get your current location before completing this delivery.');
+    }, (positionError) => {
+      const messages = {
+        1: 'Location permission was denied. Enable Location for this browser in phone settings.',
+        2: 'The phone could not determine its location. Turn on GPS and try again.',
+        3: 'GPS timed out. Check phone location settings and try again.',
+      };
+      setLocationMessage(messages[positionError.code] || 'Get your current location before completing this delivery.');
       setSavingOrderId(null);
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
   };
