@@ -1,5 +1,4 @@
 import { MapPin, Phone, UserRound } from 'lucide-react';
-import DeliveryMap from './DeliveryMap';
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
 
@@ -11,7 +10,7 @@ const getFulfillmentLabel = (order) => (
 
 const formatAddress = (order) => order.shippingAddress || order.address || order.deliveryAddress || 'Address not provided';
 
-export default function OrderDetails({ order, showTracking = false }) {
+export default function OrderDetails({ order }) {
   const fulfillmentLabel = getFulfillmentLabel(order);
   const deliveryWindow = order.deliveryTimeSlot || order.deliverySlot || 'Time not selected';
   const driverName = order.assignedDriverName || order.driverName || 'Driver not assigned';
@@ -61,7 +60,6 @@ export default function OrderDetails({ order, showTracking = false }) {
                   {driverPhone}
                 </p>
               )}
-              <DeliveryMap order={order} isOpen={showTracking} />
             </>
           ) : (
             <>

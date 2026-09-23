@@ -271,6 +271,7 @@ export default function CustomerPortal() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
+  const [requestedOrderFilter, setRequestedOrderFilter] = useState('active');
   const [orderStatus, setOrderStatus] = useState('idle');
   const [cartAddSuccess, setCartAddSuccess] = useState(false);
   const [flyToCart, setFlyToCart] = useState(null);
@@ -1205,7 +1206,10 @@ export default function CustomerPortal() {
           <CustomerNotifications
             orders={orders}
             userId={activeUserId}
-            onViewOrders={() => handleViewChange('orders')}
+            onViewOrders={(filter = 'active') => {
+              setRequestedOrderFilter(filter);
+              handleViewChange('orders');
+            }}
           />
         )}
         cartItemCount={cartItemCount}
@@ -1237,10 +1241,12 @@ export default function CustomerPortal() {
             />
           ) : activeView === 'orders' ? (
             <OrderHistoryView
+              key={requestedOrderFilter}
               orders={orders}
               ordersLoading={ordersLoading}
               ordersError={ordersError}
               onReorder={reorderFromOrder}
+              initialFilter={requestedOrderFilter}
             />
           ) : (
             <AccountView

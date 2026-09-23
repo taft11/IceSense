@@ -95,7 +95,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
   const handleNotificationClick = (notification) => {
     markAsRead(notification.signature);
     setIsOpen(false);
-    onViewOrders();
+    onViewOrders(notification.isDelivered ? 'completed' : 'active');
   };
 
   return (
@@ -154,7 +154,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-600">
                       {notification.isDelivered
-                        ? `Your order #${notification.id.slice(0, 6).toUpperCase()} has been delivered.`
+                        ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was delivered and moved to the Completed tab.`
                         : notification.isNewOrder
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was submitted and is awaiting payment verification.`
                         : `Order #${notification.id.slice(0, 6).toUpperCase()} is ${notification.statusLabel}.`}
