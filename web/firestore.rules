@@ -79,14 +79,15 @@ service cloud.firestore {
         && request.resource.data.role == 'driver'
         && request.resource.data.keys().hasAll(['fullName', 'email', 'contactNumber', 'role']));
 
-      allow update: if isOwner(userId)
-        && (
-          request.resource.data.role == resource.data.role
-          || (
-            resource.data.role == null
-            && request.resource.data.role == 'customer'
-          )
-        );
+      allow update: if isAdmin()
+        || (isOwner(userId)
+          && (
+            request.resource.data.role == resource.data.role
+            || (
+              resource.data.role == null
+              && request.resource.data.role == 'customer'
+            )
+          ));
 
       allow delete: if isAdmin() && resource.data.role == 'driver';
     }

@@ -89,6 +89,10 @@ export default function FulfillmentManagement() {
     return 'processing';
   };
 
+  const getDriverPhone = (driver) => String(
+    driver?.contactNumber || driver?.phoneNumber || driver?.phone || driver?.contact || ''
+  ).trim();
+
   const formatOrderTimestamp = (value) => {
     if (!value) return 'No date';
     const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
@@ -174,7 +178,8 @@ export default function FulfillmentManagement() {
         assignedDriverId: driverId || null,
         assignedDriverName: selectedDriver?.fullName || selectedDriver?.name || selectedDriver?.displayName || '',
         assignedDriverEmail: selectedDriver?.email || '',
-        assignedDriverPhone: selectedDriver?.contactNumber || '',
+        assignedDriverPhone: getDriverPhone(selectedDriver),
+        assignedDriverContact: getDriverPhone(selectedDriver),
         status: driverId ? 'Processing' : 'Order Confirmed',
         deliveryStatus: driverId ? 'Assigned' : 'Unassigned',
         updatedAt: serverTimestamp(),
@@ -339,7 +344,7 @@ export default function FulfillmentManagement() {
     setDriverForm({
       fullName: driver.fullName || driver.name || driver.displayName || '',
       email: driver.email || '',
-      contactNumber: `09${getPhoneDigits(driver.contactNumber)}`,
+      contactNumber: `09${getPhoneDigits(getDriverPhone(driver))}`,
       password: '',
     });
     setDriverPasswordFocused(false);

@@ -14,7 +14,14 @@ export default function OrderDetails({ order }) {
   const fulfillmentLabel = getFulfillmentLabel(order);
   const deliveryWindow = order.deliveryTimeSlot || order.deliverySlot || 'Time not selected';
   const driverName = order.assignedDriverName || order.driverName || 'Driver not assigned';
-  const driverPhone = String(order.assignedDriverPhone || order.driverPhone || order.assignedDriverContact || '').trim();
+  const driverPhone = String(
+    order.assignedDriverPhone
+      || order.assignedDriverContact
+      || order.driverPhone
+      || order.contactNumber
+      || order.phoneNumber
+      || ''
+  ).trim();
   const isDelivery = fulfillmentLabel === 'Delivery';
 
   return (
