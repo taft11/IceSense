@@ -1,3 +1,11 @@
+const REJECTION_REASON_OPTIONS = [
+  'Blurry or unreadable payment proof',
+  'Payment amount does not match the order total',
+  'Invalid or fake payment proof',
+  'Receipt reference number is missing or invalid',
+  'Payment could not be verified',
+  'Other',
+];
 import { useEffect, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
@@ -41,9 +49,10 @@ export default function AdminDashboard() {
   const [ordersError, setOrdersError] = useState('');
   const [ordersPage, setOrdersPage] = useState(1);
   const [verificationLoadingId, setVerificationLoadingId] = useState(null);
-  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState(null);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRejectOrder, setSelectedRejectOrder] = useState(null);
+  const [rejectReasonType, setRejectReasonType] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [adminUid, setAdminUid] = useState(null);
   const [activeOrderFilter, setActiveOrderFilter] = useState('pending_payment');
@@ -355,16 +364,17 @@ export default function AdminDashboard() {
     }
   };
 
-  const openReceiptPreview = (receiptUrl) => {
-    setReceiptPreviewUrl(receiptUrl);
+  const openReceiptPreview = (receiptUrl, order = null) => {
+    setReceiptPreview({ url: receiptUrl, order });
   };
 
   const closeReceiptPreview = () => {
-    setReceiptPreviewUrl(null);
+    setReceiptPreview(null);
   };
 
   const openRejectModal = (order) => {
     setSelectedRejectOrder(order);
+    setRejectReasonType('');
     setRejectReason('');
     setRejectModalOpen(true);
   };
@@ -372,6 +382,7 @@ export default function AdminDashboard() {
   const closeRejectModal = () => {
     setRejectModalOpen(false);
     setSelectedRejectOrder(null);
+    setRejectReasonType('');
     setRejectReason('');
   };
 
@@ -397,6 +408,9 @@ export default function AdminDashboard() {
 
   const handleRejectPayment = async () => {
     if (!selectedRejectOrder?.id) return;
+    const reason = [rejectReasonType, rejectReason.trim()].filter(Boolean).join(': ');
+    if (!rejectReasonType || (rejectReasonType === 'Other' && !rejectReason.trim())) return;
+
     try {
       setVerificationLoadingId(selectedRejectOrder.id);
       await restoreCancelledOrderStock(selectedRejectOrder);
@@ -406,7 +420,7 @@ export default function AdminDashboard() {
         readyForDelivery: false,
         verifiedAt: serverTimestamp(),
         verifiedBy: adminUid || null,
-        adminNotes: rejectReason || 'No reason provided.',
+        adminNotes: reason,
       });
       closeRejectModal();
     } catch (error) {
@@ -570,16 +584,30 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {receiptPreviewUrl && (
+      {receiptPreview?.url && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4 py-8">
-          <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl lg:flex-row">
             <button
+              type="button"
               onClick={closeReceiptPreview}
-              className="absolute right-4 top-4 rounded-full bg-white p-3 text-gray-500 shadow hover:bg-gray-50"
+              aria-label="Close payment proof preview"
+              className="absolute right-4 top-4 z-10 rounded-full bg-white/95 px-3 py-1 text-xl text-gray-500 shadow hover:bg-gray-50"
             >
               ×
             </button>
-            <img src={receiptPreviewUrl} alt="Receipt preview" className="h-[80vh] w-full object-contain bg-gray-100" />
+            <div className="flex min-h-[20rem] flex-1 items-center justify-center bg-slate-100 p-4 lg:min-h-[34rem]">
+              <img src={receiptPreview.url} alt="Payment receipt" className="max-h-[72vh] w-full object-contain" />
+            </div>
+            <div className="w-full shrink-0 border-t border-slate-200 bg-white p-6 lg:w-80 lg:border-l lg:border-t-0">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4091c9]">Payment review</p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">Receipt details</h3>
+              <dl className="mt-6 space-y-4 text-sm">
+                <div><dt className="text-slate-500">Order</dt><dd className="mt-1 font-semibold text-slate-900">#{receiptPreview.order?.id?.slice(0, 8).toUpperCase() || 'Unknown'}</dd></div>
+                <div><dt className="text-slate-500">Customer</dt><dd className="mt-1 font-semibold text-slate-900">{receiptPreview.order?.customerName || 'Unknown customer'}</dd></div>
+                <div><dt className="text-slate-500">Amount</dt><dd className="mt-1 font-semibold text-slate-900">₱{Number(receiptPreview.order?.total || 0).toFixed(2)}</dd></div>
+                <div><dt className="text-slate-500">Reference number</dt><dd className="mt-1 break-all rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 font-mono font-bold text-[#205a82]">{receiptPreview.order?.paymentReferenceNumber || 'Not provided'}</dd></div>
+              </dl>
+            </div>
           </div>
         </div>
       )}
@@ -591,12 +619,30 @@ export default function AdminDashboard() {
             <p className="mt-2 text-sm text-gray-600">
               Provide a reason why payment for order <span className="font-semibold">#{selectedRejectOrder.id?.slice(0, 8).toUpperCase()}</span> is rejected.
             </p>
+            <label className="mt-4 block text-sm font-semibold text-gray-700" htmlFor="rejectReasonType">
+              Rejection reason
+            </label>
+            <select
+              id="rejectReasonType"
+              value={rejectReasonType}
+              onChange={(event) => setRejectReasonType(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="">Select a reason</option>
+              {REJECTION_REASON_OPTIONS.map((reason) => (
+                <option key={reason} value={reason}>{reason}</option>
+              ))}
+            </select>
+            <label className="mt-4 block text-sm font-semibold text-gray-700" htmlFor="rejectReasonDetails">
+              Additional details <span className="font-normal text-gray-500">(optional unless Other is selected)</span>
+            </label>
             <textarea
+              id="rejectReasonDetails"
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
               rows={4}
               className="mt-4 w-full rounded-3xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 outline-none focus:border-[#4091c9] focus:ring-2 focus:ring-sky-100"
-              placeholder="Reason for rejection (e.g. blurry screenshot, amount mismatch)"
+              placeholder="Add details for the customer"
             />
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
@@ -607,7 +653,7 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={handleRejectPayment}
-                disabled={verificationLoadingId === selectedRejectOrder.id}
+                disabled={verificationLoadingId === selectedRejectOrder.id || !rejectReasonType || (rejectReasonType === 'Other' && !rejectReason.trim())}
                 className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
               >
                 {verificationLoadingId === selectedRejectOrder.id ? 'Rejecting...' : 'Reject Payment'}

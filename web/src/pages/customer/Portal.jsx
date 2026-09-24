@@ -280,6 +280,8 @@ export default function CustomerPortal() {
   const [isPendingOrderModalOpen, setIsPendingOrderModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [reschedulingOrder, setReschedulingOrder] = useState(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountSection, setAccountSection] = useState('profile');
   const [accountInfo, setAccountInfo] = useState({
@@ -618,7 +620,7 @@ export default function CustomerPortal() {
 
   const addToCart = (event) => {
     event.preventDefault();
-    if (!activeProduct) return;
+    if (!activeProduct || isRescheduling) return;
 
     const remainingStock = getRemainingStockForProduct(selectedProductId);
     const qtyToAdd = Math.min(quantity, Math.max(remainingStock, 0));
@@ -655,6 +657,8 @@ export default function CustomerPortal() {
   };
 
   const updateCartItemQuantity = (productId, delta) => {
+    if (isRescheduling) return;
+
     setCartItems((prev) => {
       const existingItem = prev.find((item) => item.productId === productId);
       if (!existingItem) return prev;
@@ -679,6 +683,8 @@ export default function CustomerPortal() {
   };
 
   const removeFromCart = (productId) => {
+    if (isRescheduling) return;
+
     setCartItems((prev) => prev.filter((item) => item.productId !== productId));
   };
 
@@ -687,7 +693,7 @@ export default function CustomerPortal() {
     .filter(Boolean)
     .join(' ');
 
-  const reorderFromOrder = (order) => {
+  const reorderFromOrder = (order, rescheduling = false) => {
     const normalizedItems = (order.items || []).map((item) => ({
       productId: item.productId,
       name: item.name,
@@ -698,6 +704,8 @@ export default function CustomerPortal() {
     if (!normalizedItems.length) return;
 
     setCartItems((prev) => {
+      if (rescheduling) return normalizedItems;
+
       const merged = [...prev];
 
       normalizedItems.forEach((item) => {
@@ -717,7 +725,10 @@ export default function CustomerPortal() {
       return merged;
     });
 
+    setIsRescheduling(rescheduling);
+    setReschedulingOrder(rescheduling ? order : null);
     setIsCartOpen(true);
+    setIsDeliveryExpanded(true);
     setOrderStatus('idle');
   };
 
@@ -789,12 +800,12 @@ export default function CustomerPortal() {
       return;
     }
 
-    if (!receiptFile) {
+    if (!isRescheduling && !receiptFile) {
       setReceiptError('Please upload a GCash receipt screenshot before placing your order.');
       return;
     }
 
-    if (!receiptReferenceNumber.trim()) {
+    if (!isRescheduling && !receiptReferenceNumber.trim()) {
       setReceiptError('Please enter the receipt reference number before placing your order.');
       return;
     }
@@ -820,13 +831,16 @@ export default function CustomerPortal() {
     try {
       const ordersRef = collection(db, 'orders');
 
-      const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
-      const optimizedReceipt = await optimizeReceiptImage(receiptFile);
-      await uploadBytes(receiptRef, optimizedReceipt, {
-        contentType: optimizedReceipt.type || 'image/jpeg',
-        cacheControl: 'public,max-age=31536000,immutable',
-      });
-      const receiptUrl = await getDownloadURL(receiptRef);
+      let receiptUrl = reschedulingOrder?.receiptUrl || '';
+      if (!isRescheduling) {
+        const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
+        const optimizedReceipt = await optimizeReceiptImage(receiptFile);
+        await uploadBytes(receiptRef, optimizedReceipt, {
+          contentType: optimizedReceipt.type || 'image/jpeg',
+          cacheControl: 'public,max-age=31536000,immutable',
+        });
+        receiptUrl = await getDownloadURL(receiptRef);
+      }
 
       const orderPayload = {
         userId: currentUser.uid,
@@ -837,13 +851,17 @@ export default function CustomerPortal() {
           price: item.price,
         })),
         total: cartSubtotal,
-        status: 'Pending Payment Verification',
+        status: isRescheduling ? 'Reschedule Request' : 'Pending Payment Verification',
         paymentMethod,
-        paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+        paymentStatus: isRescheduling ? 'PAID' : 'PENDING_PAYMENT_VERIFICATION',
         fulfillmentMethod,
         readyForDelivery: false,
         receiptUrl,
-        paymentReferenceNumber: receiptReferenceNumber.trim(),
+        paymentReferenceNumber: isRescheduling
+          ? reschedulingOrder?.paymentReferenceNumber || 'Already paid on original order'
+          : receiptReferenceNumber.trim(),
+        isRescheduledOrder: isRescheduling,
+        rescheduledFromOrderId: isRescheduling ? reschedulingOrder?.id || null : null,
         adminNotes: '',
         verifiedAt: null,
         verifiedBy: null,
@@ -872,6 +890,8 @@ export default function CustomerPortal() {
       await updateDoc(orderDocRef, { orderId: orderDocRef.id });
 
       setCartItems([]);
+      setIsRescheduling(false);
+      setReschedulingOrder(null);
       setReceiptFile(null);
       setReceiptReferenceNumber('');
       setOrderStatus('success');
@@ -910,6 +930,10 @@ export default function CustomerPortal() {
 
     if (fulfillmentMethod === 'delivery' && !hasSavedAddress) {
       redirectToAddressSetup();
+      return;
+    }
+    if (isRescheduling) {
+      handleOrder();
       return;
     }
     setReceiptFile(null);
@@ -1213,6 +1237,7 @@ export default function CustomerPortal() {
           />
         )}
         cartItemCount={cartItemCount}
+        isRescheduling={isRescheduling}
         cartButtonRef={cartButtonRef}
         isCartAnimating={Boolean(flyToCart)}
         onLogout={handleLogout}
@@ -1303,7 +1328,11 @@ export default function CustomerPortal() {
 
       <CartSidebar
         isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
+        onClose={() => {
+          setIsCartOpen(false);
+          setIsRescheduling(false);
+          setReschedulingOrder(null);
+        }}
         cartItems={cartItems}
         cartSubtotal={cartSubtotal}
         cartItemCount={cartItemCount}

@@ -8,6 +8,7 @@ export default function CartSidebar({
   cartSubtotal,
   cartItemCount,
   orderStatus,
+  isRescheduling,
   onUpdateQuantity,
   onRemoveItem,
   onCheckout,
@@ -217,6 +218,12 @@ export default function CartSidebar({
         </div>
 
         <div className="px-6 py-5">
+          {isRescheduling && (
+            <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+              <p className="font-semibold">Reschedule failed delivery</p>
+              <p className="mt-1">Your original items and quantities are locked. Choose a new date and time below.</p>
+            </div>
+          )}
           {cartItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
               <p className="font-semibold text-gray-800">Your cart is empty</p>
@@ -237,13 +244,15 @@ export default function CartSidebar({
                           ₱{(product?.price ?? 0).toFixed(2)} each
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveItem(item.productId)}
-                        className="text-sm font-semibold text-red-600 hover:text-red-700"
-                      >
-                        Remove
-                      </button>
+                      {!isRescheduling && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveItem(item.productId)}
+                          className="text-sm font-semibold text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
 
                     <div className="mt-3 flex items-center justify-between">
@@ -251,7 +260,8 @@ export default function CartSidebar({
                         <button
                           type="button"
                           onClick={() => onUpdateQuantity(item.productId, -1)}
-                          className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100"
+                          disabled={isRescheduling}
+                          className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <Minus className="mx-auto h-4 w-4" />
                         </button>
@@ -259,8 +269,8 @@ export default function CartSidebar({
                         <button
                           type="button"
                           onClick={() => onUpdateQuantity(item.productId, 1)}
-                          className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100"
-                          disabled={getRemainingStock(item.productId) <= 0}
+                          disabled={isRescheduling || getRemainingStock(item.productId) <= 0}
+                          className="h-8 w-8 rounded-full bg-white text-gray-700 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <Plus className="mx-auto h-4 w-4" />
                         </button>
@@ -288,7 +298,8 @@ export default function CartSidebar({
                   key={option.id}
                   type="button"
                   onClick={() => onFulfillmentMethodChange(option.id)}
-                  className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+                  disabled={isRescheduling}
+                  className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     fulfillmentMethod === option.id
                       ? 'border-[#4091c9] bg-[#4091c9] text-white'
                       : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#4091c9] hover:text-[#4091c9]'
@@ -427,7 +438,8 @@ export default function CartSidebar({
           >
             {orderStatus === 'idle' && cartItems.length > 0 && (
               <>
-                <ShoppingCart className="mr-2 h-5 w-5" /> Check Out
+                <ShoppingCart className="mr-2 h-5 w-5" />
+                {isRescheduling ? 'Confirm New Delivery Date' : 'Check Out'}
               </>
             )}
             {orderStatus === 'processing' && (

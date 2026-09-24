@@ -281,7 +281,7 @@ export default function Overview({
                           <span>{getPaymentMethodLabel(order)} · Payment verification required</span>
                         </div>
                         {receiptUrl ? (
-                          <button type="button" onClick={() => onOpenReceiptPreview(receiptUrl)} className="inline-flex items-center gap-1 font-semibold text-[#2d75aa] hover:underline">
+                            <button type="button" onClick={() => onOpenReceiptPreview(receiptUrl, order)} className="inline-flex items-center gap-1 font-semibold text-[#2d75aa] hover:underline">
                             <Eye className="h-3.5 w-3.5" /> View payment proof
                           </button>
                         ) : <p className="text-amber-700">No payment proof uploaded.</p>}

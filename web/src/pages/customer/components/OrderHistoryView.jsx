@@ -10,38 +10,107 @@ const STATUS_BADGE_STYLES = {
   'Out for Delivery': 'bg-indigo-100 text-indigo-800',
   Delivered: 'bg-emerald-100 text-emerald-800',
   Cancelled: 'bg-red-100 text-red-800',
+  Failed: 'bg-orange-100 text-orange-800',
+  'Not Delivered': 'bg-orange-100 text-orange-800',
 };
 
 const FILTER_OPTIONS = [
   { id: 'all', label: 'All Orders' },
   { id: 'active', label: 'Active' },
   { id: 'completed', label: 'Completed' },
+  { id: 'failed', label: 'Failed Delivery' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
 
 const ORDERS_PER_PAGE = 5;
 
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase().replace(/_/g, ' ');
 
-const isCompletedOrder = (order) => {
+const isSuccessfullyCompletedOrder = (order) => {
   const status = normalizeStatus(order.status);
   const paymentStatus = normalizeStatus(order.paymentStatus);
+  const pickupStatus = normalizeStatus(order.pickupStatus);
+  const deliveryStatus = normalizeStatus(order.deliveryStatus);
 
   return [
     'delivered',
     'completed',
     'done',
     'finished',
+    'delivery completed',
     'picked up',
-    'cancelled',
-    'rejected',
-    'failed',
-  ].includes(status) || ['cancelled', 'rejected', 'failed'].includes(paymentStatus);
+  ].includes(status)
+    || paymentStatus === 'delivered'
+    || pickupStatus === 'picked up'
+    || ['delivered', 'completed', 'done', 'finished', 'delivery completed'].includes(deliveryStatus);
 };
 
-const isOrderActive = (order) => !isCompletedOrder(order);
+const isPastDeliveryDate = (value) => {
+  if (!value) return false;
 
-const getDisplayStatus = (status) => {
-  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const deliveryDate = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(deliveryDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return deliveryDate < today;
+};
+
+const isCancelledOrder = (order) => {
+  const status = normalizeStatus(order.status);
+  const paymentStatus = normalizeStatus(order.paymentStatus);
+
+  return ['cancelled', 'canceled', 'rejected'].includes(status)
+    || ['cancelled', 'canceled', 'rejected'].includes(paymentStatus);
+};
+
+const isFailedOrder = (order) => {
+  const status = normalizeStatus(order.status);
+  const paymentStatus = normalizeStatus(order.paymentStatus);
+  const deliveryStatus = normalizeStatus(order.deliveryStatus);
+
+  if (
+    ['failed', 'not delivered', 'undelivered'].includes(status)
+    || paymentStatus === 'failed'
+    || ['failed', 'not delivered', 'undelivered'].includes(deliveryStatus)
+  ) {
+    return true;
+  }
+
+  return isPastDeliveryDate(order.deliveryDate) && !isSuccessfullyCompletedOrder(order);
+};
+
+const isCompletedOrder = (order) => {
+  return isSuccessfullyCompletedOrder(order);
+};
+
+const isOrderActive = (order) => !isCompletedOrder(order) && !isFailedOrder(order) && !isCancelledOrder(order);
+
+const getDisplayStatus = (order) => {
+  const status = normalizeStatus(order.status);
+  const paymentStatus = normalizeStatus(order.paymentStatus);
+  const deliveryStatus = normalizeStatus(order.deliveryStatus);
+
+  if (
+    ['cancelled', 'canceled', 'rejected'].includes(status)
+    || ['cancelled', 'canceled', 'rejected'].includes(paymentStatus)
+  ) {
+    return 'Cancelled';
+  }
+
+  if (
+    status === 'failed'
+    || paymentStatus === 'failed'
+    || ['failed', 'not delivered', 'undelivered'].includes(deliveryStatus)
+  ) {
+    return 'Failed';
+  }
+
+  if (isPastDeliveryDate(order.deliveryDate) && !isSuccessfullyCompletedOrder(order)) {
+    return 'Not Delivered';
+  }
+
+  const normalizedStatus = status;
   if (['attempting', 'out for delivery', 'in transit', 'on the way'].includes(normalizedStatus)) {
     return 'Out for Delivery';
   }
@@ -86,6 +155,14 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
 
     if (activeFilter === 'completed') {
       return orders.filter((order) => isCompletedOrder(order));
+    }
+
+    if (activeFilter === 'failed') {
+      return orders.filter((order) => isFailedOrder(order));
+    }
+
+    if (activeFilter === 'cancelled') {
+      return orders.filter((order) => isCancelledOrder(order));
     }
 
     return orders;
@@ -152,7 +229,7 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
       ) : (
         <div className="space-y-4">
           {paginatedOrders.map((order) => {
-            const displayStatus = getDisplayStatus(order.status);
+            const displayStatus = getDisplayStatus(order);
             const orderDate = formatDate(order.createdAt);
             const deliveryDate = formatReadableDate(order.deliveryDate);
             const deliveryTimeSlot = order.deliveryTimeSlot || order.deliverySlot || 'Not selected';
@@ -272,12 +349,12 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                         </button>
                       )}
                     </div>
-                    <button
+                      <button
                       type="button"
-                      onClick={() => onReorder?.(order)}
+                        onClick={() => onReorder?.(order, isFailedOrder(order))}
                       className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9]"
                     >
-                      Reorder
+                      {isFailedOrder(order) ? 'Choose New Date' : 'Reorder'}
                     </button>
                   </div>
                 </div>

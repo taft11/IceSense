@@ -84,6 +84,10 @@ export default function Orders({
     today.setHours(0, 0, 0, 0);
     const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
 
+    if (order.isRescheduledOrder) {
+      return { label: 'Reschedule Request', className: 'bg-cyan-100 text-cyan-700' };
+    }
+
     if (normalizedStatus === 'failed' || paymentStatus === 'failed') {
       return { label: 'Failed', className: 'bg-orange-100 text-orange-700' };
     }
@@ -378,7 +382,7 @@ export default function Orders({
         <>
           <div className="mt-6 w-full overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-0 divide-y divide-gray-200 text-sm">
+              <table className="w-full min-w-[980px] divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">Order</th>
@@ -447,7 +451,7 @@ export default function Orders({
                               <div className="grid min-w-[270px] grid-cols-3 gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => receiptPreviewUrl && onOpenReceiptPreview(receiptPreviewUrl)}
+                                  onClick={() => receiptPreviewUrl && onOpenReceiptPreview(receiptPreviewUrl, order)}
                                   disabled={!receiptPreviewUrl}
                                   className="h-9 min-w-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
@@ -513,7 +517,7 @@ export default function Orders({
                                   {receiptPreviewUrl ? (
                                     <button
                                       type="button"
-                                      onClick={() => onOpenReceiptPreview(receiptPreviewUrl)}
+                                      onClick={() => onOpenReceiptPreview(receiptPreviewUrl, order)}
                                       className="mt-2 block overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm transition hover:border-[#4091c9] hover:shadow-md"
                                       aria-label="Preview payment receipt"
                                     >
