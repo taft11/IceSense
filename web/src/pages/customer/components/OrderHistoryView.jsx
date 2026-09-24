@@ -73,8 +73,8 @@ const getItemImage = (item) => {
   return null;
 };
 
-export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder }) {
-  const [activeFilter, setActiveFilter] = useState('active');
+export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder, initialFilter = 'active' }) {
+  const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [expandedItemsOrderId, setExpandedItemsOrderId] = useState(null);
