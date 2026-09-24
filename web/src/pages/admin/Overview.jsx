@@ -44,35 +44,31 @@ export default function Overview({
   const currentStockKg = Number(iotData?.stockProducedKg || 0);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  // Water tank calibration constants
-  const TANK_TOTAL_HEIGHT = 43; // cm
-  const SENSOR_BLIND_ZONE = 25; // cm
-  const MAX_MEASURABLE_DEPTH = TANK_TOTAL_HEIGHT - SENSOR_BLIND_ZONE; // 18 cm
+  // Water tank calibration for 33 cm jug demo setup
+  // Empty at 58 cm sensor distance, full at 25 cm sensor distance
+  const TANK_TOTAL_HEIGHT = 33; // cm
+  const SENSOR_EMPTY_DISTANCE = 58; // cm
+  const SENSOR_FULL_DISTANCE = 25; // cm
+  const MAX_MEASURABLE_DEPTH = TANK_TOTAL_HEIGHT; // 33 cm full tank depth
 
   // Raw distance reading from top of tank to water surface (cm)
   const rawDistance = typeof iotData?.waterDistance === 'number' ? iotData.waterDistance : null;
 
   // Compute water depth (h) and percentage (P)
-  let waterDepth = null; // measured liquid height from bottom of sensor's measurable zone
+  let waterDepth = null;
   let waterPercent = null;
   let overflow = false;
 
   if (rawDistance !== null && !Number.isNaN(rawDistance)) {
-    // h = total height - distance
-    const h = TANK_TOTAL_HEIGHT - rawDistance;
-
-    if (rawDistance < SENSOR_BLIND_ZONE) {
-      // Water has entered the blind zone — treat as full (or overflow)
+    if (rawDistance <= SENSOR_FULL_DISTANCE) {
       waterDepth = MAX_MEASURABLE_DEPTH;
       waterPercent = 100;
       overflow = true;
-    } else if (rawDistance >= TANK_TOTAL_HEIGHT) {
-      // Sensor reads at or beyond tank bottom => empty
+    } else if (rawDistance >= SENSOR_EMPTY_DISTANCE) {
       waterDepth = 0;
       waterPercent = 0;
     } else {
-      // Normal measurable range
-      waterDepth = Math.max(0, Math.min(h, MAX_MEASURABLE_DEPTH));
+      waterDepth = Math.max(0, Math.min(SENSOR_EMPTY_DISTANCE - rawDistance, MAX_MEASURABLE_DEPTH));
       waterPercent = Math.max(0, Math.min((waterDepth / MAX_MEASURABLE_DEPTH) * 100, 100));
     }
   }
