@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { Calendar, ClipboardList, CreditCard, Eye, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import useDemandForecast from '../../hooks/useDemandForecast';
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-const formatKg = (value) => `${Math.round(Number(value || 0)).toLocaleString()} kg`;
 const FREEZER_TOO_COLD_THRESHOLD = -22;
 const FREEZER_STABLE_MIN = -20;
 const FREEZER_STABLE_MAX = -18;
@@ -22,7 +20,9 @@ const ChartTooltip = ({ active, payload, label }) => {
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-slate-600 font-medium">{entry.name}:</span>
           </div>
-          <span className="font-bold text-slate-900">{formatKg(entry.value)}</span>
+          <span className="font-bold text-slate-900">
+            {Number(entry.value).toFixed(1)}{entry.dataKey === 'temperature' ? '°C' : '%'}
+          </span>
         </div>
       ))}
     </div>
@@ -38,9 +38,9 @@ export default function Overview({
   onApprovePayment,
   onOpenReceiptPreview,
   onOpenRejectModal,
+  environmentHistory = [],
 }) {
   const navigate = useNavigate();
-  const { forecastDays = [], loading } = useDemandForecast();
   const currentStockKg = Number(iotData?.stockProducedKg || 0);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
@@ -73,11 +73,22 @@ export default function Overview({
     }
   }
 
-  const chartData = forecastDays.map((day) => ({
-    day: day.label,
-    'Historical Production': Math.round(day.total_kg_produced || 0),
-    'Predicted Demand': Math.round(day.total_kg_demanded || 0),
-  }));
+  const chartData = environmentHistory
+    .map((entry) => {
+      const recordedAt = entry.recordedAt?.toDate?.() || (entry.recordedAt ? new Date(entry.recordedAt) : null);
+      if (!recordedAt || Number.isNaN(recordedAt.getTime())) return null;
+
+      return {
+        timestamp: recordedAt.getTime(),
+        label: recordedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        temperature: Number.isFinite(Number(entry.temperature)) ? Number(entry.temperature) : null,
+        humidity: Number.isFinite(Number(entry.humidity)) ? Number(entry.humidity) : null,
+        waterLevel: Number.isFinite(Number(entry.waterPercent)) ? Number(entry.waterPercent) : null,
+      };
+    })
+    .filter(Boolean)
+    .filter((entry) => entry.timestamp >= Date.now() - (24 * 60 * 60 * 1000))
+    .sort((left, right) => left.timestamp - right.timestamp);
 
   const getReceiptPreviewUrl = (order) => order?.receiptUrl || order?.paymentReceiptUrl || order?.paymentProofUrl || null;
   const getPaymentMethodLabel = (order) => {
@@ -191,48 +202,55 @@ export default function Overview({
         <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm lg:col-span-2">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h3 className="text-xl font-bold text-gray-900">Production vs Demand</h3>
-              <p className="text-sm text-gray-500 mt-1">Weekly volume analysis</p>
+              <h3 className="text-xl font-bold text-gray-900">Facility Environment &amp; Utility Log</h3>
+              <p className="text-sm text-gray-500 mt-1">Last 24 hours of temperature, humidity, and water tank readings</p>
             </div>
-            <select className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700 outline-none">
-              <option>This Week</option>
-              <option>Last Week</option>
-            </select>
           </div>
           <div className="h-56 w-full rounded-[28px] border border-slate-200 bg-slate-50 p-4 shadow-sm">
-            {loading ? (
+            {chartData.length === 0 ? (
               <div className="flex h-full items-center justify-center">
-                <div className="flex flex-col items-center gap-3 text-slate-500 text-sm font-medium">
-                  <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4091c9] border-t-transparent" />
-                  <span>Loading demand forecast data...</span>
-                </div>
+                <p className="text-center text-sm font-medium text-slate-500">Environmental history will appear after the first reading is saved.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `${v / 1000}k`} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} minTickGap={24} />
+                  <YAxis yAxisId="temperature" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(value) => `${value}°`} />
+                  <YAxis yAxisId="percentage" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(value) => `${value}%`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: '16px', fontSize: '12px' }} />
-                  <Area
+                  <Line
                     type="monotone"
-                    dataKey="Historical Production"
-                    fill="#c7d9f5"
-                    stroke="#4091c9"
+                    dataKey="temperature"
+                    name="Freezer Temperature"
+                    yAxisId="temperature"
+                    stroke="#ef4444"
                     strokeWidth={2}
-                    fillOpacity={0.22}
-                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    dot={false}
+                    connectNulls
                   />
                   <Line
                     type="monotone"
-                    dataKey="Predicted Demand"
-                    stroke="#0f172a"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#0f172a' }}
-                    activeDot={{ r: 5 }}
+                    dataKey="humidity"
+                    name="Humidity"
+                    yAxisId="percentage"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
                   />
-                </ComposedChart>
+                  <Line
+                    type="monotone"
+                    dataKey="waterLevel"
+                    name="Water Tank Level"
+                    yAxisId="percentage"
+                    stroke="#4091c9"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                </LineChart>
               </ResponsiveContainer>
             )}
           </div>

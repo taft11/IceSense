@@ -1,5 +1,5 @@
 import { getApp } from 'firebase/app';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, ShieldCheck } from 'lucide-react';
 import { addDoc, collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDatabase, onValue, ref, update } from 'firebase/database';
@@ -108,6 +108,8 @@ export default function Inventory() {
   const [loadingMessage, setLoadingMessage] = useState('Loading inventory…');
   const [auditPage, setAuditPage] = useState(1);
   const logsPerPage = 5;
+  const previousScaleInventoryRef = useRef(null);
+  const previousScaleLogsRef = useRef(null);
 
   useEffect(() => {
     let unsubscribeInventory = null;
@@ -294,6 +296,154 @@ export default function Inventory() {
       };
     });
   }, [firestoreInventory, products, scaleInventory]);
+
+  useEffect(() => {
+    if (!scaleInventory || !products.length) {
+      previousScaleInventoryRef.current = scaleInventory || null;
+      return;
+    }
+
+    const previousScaleInventory = previousScaleInventoryRef.current;
+    previousScaleInventoryRef.current = scaleInventory;
+
+    if (!previousScaleInventory) {
+      return;
+    }
+
+    const currentSections = {
+      tube: scaleInventory?.tube_ice || {},
+      crushed: scaleInventory?.crushed_ice || {},
+    };
+    const previousSections = {
+      tube: previousScaleInventory?.tube_ice || {},
+      crushed: previousScaleInventory?.crushed_ice || {},
+    };
+
+    const scaleEntries = products
+      .filter((product) => product.isMonitoredByScale)
+      .map((product) => {
+        const currentSection = currentSections[product.type] || {};
+        const previousSection = previousSections[product.type] || {};
+        const currentBreakdown = currentSection.sacks_breakdown || {};
+        const previousBreakdown = previousSection.sacks_breakdown || {};
+        const scaleKey = `${Number(product.weightKg || 0)}kg_sacks`;
+
+        const previousStock = Number(
+          previousBreakdown[scaleKey] ?? previousSection.total_sacks ?? previousSection.total_sacks_count ?? 0
+        );
+        const nextStock = Number(
+          currentBreakdown[scaleKey] ?? currentSection.total_sacks ?? currentSection.total_sacks_count ?? 0
+        );
+
+        return {
+          productId: product.productId,
+          previousStock,
+          newStock: nextStock,
+          changeQuantity: nextStock - previousStock,
+        };
+      })
+      .filter((entry) => entry.changeQuantity !== 0);
+
+    if (scaleEntries.length === 0) {
+      return;
+    }
+
+    const writeScaleLogs = async () => {
+      await Promise.all(
+        scaleEntries.map((entry) =>
+          addDoc(collection(db, 'stock_logs'), {
+            productId: entry.productId,
+            changeQuantity: entry.changeQuantity,
+            previousStock: entry.previousStock,
+            newStock: entry.newStock,
+            reason: 'scale_sync',
+            source: 'automatic_scale',
+            performedBy: 'ESP32_Scale_01',
+            timestamp: serverTimestamp(),
+          })
+        )
+      );
+    };
+
+    writeScaleLogs().catch((error) => {
+      console.error('Unable to log automatic scale changes', error);
+    });
+  }, [products, scaleInventory]);
+
+  useEffect(() => {
+    if (!products.length) {
+      return undefined;
+    }
+
+    const scaleLogsRef = ref(realtimeDb, 'inventory_logs/scale_1');
+    const unsubscribeScaleLogs = onValue(scaleLogsRef, (snapshot) => {
+      const value = snapshot.val() || {};
+      const entries = Object.entries(value).map(([id, payload]) => ({ id, ...(payload || {}) }));
+
+      if (!previousScaleLogsRef.current) {
+        previousScaleLogsRef.current = entries;
+        return;
+      }
+
+      const previousIds = new Set(previousScaleLogsRef.current.map((entry) => entry.id));
+      const newEntries = entries.filter((entry) => !previousIds.has(entry.id));
+      previousScaleLogsRef.current = entries;
+
+      if (newEntries.length === 0) {
+        return;
+      }
+
+      const writeScaleEventLogs = async () => {
+        await Promise.all(
+          newEntries.map((entry) => {
+            const rawEventType = String(entry.event_type || '').toUpperCase();
+            const changeQuantity = rawEventType.includes('ADDED') ? 1 : rawEventType.includes('REMOVED') ? -1 : 0;
+
+            if (changeQuantity === 0) {
+              return null;
+            }
+
+            const weight = Number(entry.sack_weight || 0);
+            const product = products.find((candidate) => {
+              const isMatchingType = candidate.type === (entry.ice_type === 'tube_ice' ? 'tube' : 'crushed');
+              return isMatchingType && Number(candidate.weightKg) === weight;
+            });
+
+            if (!product) {
+              return null;
+            }
+
+            const countFromRealtime = (() => {
+              const section = product.type === 'tube' ? (scaleInventory?.tube_ice || {}) : (scaleInventory?.crushed_ice || {});
+              const breakdown = section.sacks_breakdown || {};
+              const scaleKey = `${Number(product.weightKg || 0)}kg_sacks`;
+              return Number(breakdown[scaleKey] ?? section.total_sacks ?? section.total_sacks_count ?? 0);
+            })();
+
+            const previousStock = Math.max(0, countFromRealtime - changeQuantity);
+            const newStock = countFromRealtime;
+
+            return addDoc(collection(db, 'stock_logs'), {
+              productId: product.productId,
+              changeQuantity,
+              previousStock,
+              newStock,
+              reason: 'scale_sync',
+              source: 'automatic_scale',
+              performedBy: 'ESP32_Scale_01',
+              timestamp: entry.timestamp ? new Date(Number(entry.timestamp)) : serverTimestamp(),
+            });
+          })
+        );
+      };
+
+      writeScaleEventLogs().catch((error) => {
+        console.error('Unable to log automatic scale event changes', error);
+      });
+    });
+
+    return () => unsubscribeScaleLogs();
+  }, [products, scaleInventory]);
 
   const selectedItem = useMemo(
     () => inventoryRows.find((item) => item.id === selectedItemId) || inventoryRows[0],

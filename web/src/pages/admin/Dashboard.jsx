@@ -6,11 +6,11 @@ const REJECTION_REASON_OPTIONS = [
   'Payment could not be verified',
   'Other',
 ];
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
-import { collection, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, database, db } from '../../services/firebase';
 import Overview from './Overview';
@@ -20,6 +20,19 @@ import Inventory from './Inventory';
 import Deliveries from './Deliveries';
 import DemandForecastPage from './DemandForecastPage';
 import RevenueReports from './RevenueReports';
+import AdminNotificationBell from './components/AdminNotificationBell';
+
+const ENVIRONMENT_SAMPLE_INTERVAL_MS = 5 * 60 * 1000;
+const FREEZER_TOO_WARM_THRESHOLD = -15;
+const SENSOR_EMPTY_DISTANCE = 58;
+const SENSOR_FULL_DISTANCE = 25;
+
+const getWaterPercent = (distance) => {
+  if (!Number.isFinite(distance)) return null;
+  if (distance <= SENSOR_FULL_DISTANCE) return 100;
+  if (distance >= SENSOR_EMPTY_DISTANCE) return 0;
+  return Math.max(0, Math.min(((SENSOR_EMPTY_DISTANCE - distance) / (SENSOR_EMPTY_DISTANCE - SENSOR_FULL_DISTANCE)) * 100, 100));
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -41,6 +54,8 @@ export default function AdminDashboard() {
     humidity: 'Loading...',
     waterLevel: 'Loading...',
     waterDistance: null,
+    temperatureUpdatedAt: null,
+    waterLevelUpdatedAt: null,
     stockProducedKg: 0,
     activeTrucks: 3,
   });
@@ -59,6 +74,9 @@ export default function AdminDashboard() {
   const [activeDateFilter, setActiveDateFilter] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [environmentHistory, setEnvironmentHistory] = useState([]);
+  const lastEnvironmentSampleRef = useRef(null);
+  const lastEnvironmentSavedAtRef = useRef(null);
 
   const ORDERS_PER_PAGE = 10;
 
@@ -232,22 +250,66 @@ export default function AdminDashboard() {
   useEffect(() => {
     const iotRef = ref(database, 'IoT');
     const inventoryRef = ref(database, 'inventory/scale_1');
+    const environmentLogsQuery = query(collection(db, 'environment_logs'), orderBy('recordedAt', 'desc'), limit(300));
+
+    const unsubscribeEnvironmentLogs = onSnapshot(environmentLogsQuery, (snapshot) => {
+      setEnvironmentHistory(snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        ...documentSnapshot.data(),
+      })));
+    }, (error) => {
+      console.error('Unable to load environment history', error);
+    });
 
     const unsubscribeIot = onValue(iotRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const temp = data.Environment?.temperature;
-        const hum = data.Environment?.humidity;
-        const dist = data.WaterLevel?.distance;
+        const temp = Number(data.Environment?.temperature);
+        const hum = Number(data.Environment?.humidity);
+        const dist = Number(data.WaterLevel?.distance);
+        const nextTemperature = Number.isFinite(temp) ? `${temp.toFixed(1)}°C` : 'N/A';
+        const nextWaterLevel = Number.isFinite(dist) ? `${dist.toFixed(1)} cm` : 'N/A';
+        const snapshotTimestamp = Date.now();
+        const waterPercent = getWaterPercent(dist);
+        const temperatureCritical = Number.isFinite(temp) && temp > FREEZER_TOO_WARM_THRESHOLD;
+        const waterLevelCritical = waterPercent === 0;
+        const previousSample = lastEnvironmentSampleRef.current;
+        const hasSampleIntervalElapsed = !lastEnvironmentSavedAtRef.current
+          || snapshotTimestamp - lastEnvironmentSavedAtRef.current >= ENVIRONMENT_SAMPLE_INTERVAL_MS;
+        const criticalValueReached = (temperatureCritical && !previousSample?.temperatureCritical)
+          || (waterLevelCritical && !previousSample?.waterLevelCritical);
+
+        if (hasSampleIntervalElapsed || criticalValueReached) {
+          lastEnvironmentSavedAtRef.current = snapshotTimestamp;
+          addDoc(collection(db, 'environment_logs'), {
+            temperature: Number.isFinite(temp) ? temp : null,
+            humidity: Number.isFinite(hum) ? hum : null,
+            waterDistance: Number.isFinite(dist) ? dist : null,
+            waterPercent,
+            temperatureCritical,
+            waterLevelCritical,
+            recordedAt: serverTimestamp(),
+            source: 'firebase_iot',
+          }).catch((error) => {
+            console.error('Unable to save environment history', error);
+          });
+        }
+
+        lastEnvironmentSampleRef.current = {
+          temperatureCritical,
+          waterLevelCritical,
+        };
 
         setIotData((prev) => ({
           ...prev,
-          temperature: temp !== undefined ? `${temp.toFixed(1)}°C` : 'N/A',
-          humidity: hum !== undefined ? `${hum.toFixed(1)}%` : 'N/A',
+          temperature: nextTemperature,
+          humidity: Number.isFinite(hum) ? `${hum.toFixed(1)}%` : 'N/A',
           // raw numeric distance (cm) from sensor to water surface
-          waterDistance: dist !== undefined && dist !== null ? Number(dist) : null,
+          waterDistance: Number.isFinite(dist) ? dist : null,
           // legacy/secondary textual display preserved
-          waterLevel: dist !== undefined && dist !== null ? `${dist.toFixed(1)} cm` : 'N/A',
+          waterLevel: nextWaterLevel,
+          temperatureUpdatedAt: prev.temperature === nextTemperature ? prev.temperatureUpdatedAt : snapshotTimestamp,
+          waterLevelUpdatedAt: prev.waterLevel === nextWaterLevel ? prev.waterLevelUpdatedAt : snapshotTimestamp,
         }));
       }
     });
@@ -283,6 +345,7 @@ export default function AdminDashboard() {
     return () => {
       unsubscribeIot();
       unsubscribeInventory();
+      unsubscribeEnvironmentLogs();
     };
   }, []);
 
@@ -484,7 +547,7 @@ export default function AdminDashboard() {
           <ul className="space-y-1.5">
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/overview" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'overview' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Overview</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Orders</span><span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{pendingOrders || 3}</span></Link></li>
-            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Fulfillment</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
+            <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-3 text-sm ${isOrdersSectionActive && activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}><span>Handover & Shipping</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{unassignedDeliveries}</span></Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/inventory" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'inventory' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Inventory</Link></li>
             <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/forecast" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'forecast' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Predictive Analysis</Link></li>
             {userRole === 'owner' && <li><Link onClick={() => setMobileMenuOpen(false)} to="/admin/revenue-reports" className={`flex w-full rounded-r-xl border-l-4 px-3 py-3 text-sm ${activeView === 'revenue-reports' ? 'border-sky-600 bg-sky-50/60 font-semibold text-sky-700' : 'border-transparent text-slate-700 hover:bg-slate-50'}`}>Revenue Reports</Link></li>}
@@ -497,7 +560,7 @@ export default function AdminDashboard() {
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-gray-200 bg-white p-6 shadow-sm md:flex">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Bella Erin<span className="text-[#4091c9]">.</span></h2>
-          <Menu className="h-5 w-5 text-gray-400" />
+          <AdminNotificationBell iotData={iotData} />
         </div>
 
         <nav className="flex-1">
@@ -517,7 +580,7 @@ export default function AdminDashboard() {
             </li>
             <li>
               <Link to="/admin/deliveries" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'deliveries' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <span>Fulfillment</span>
+                <span>Handover & Shipping</span>
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                   {unassignedDeliveries}
                 </span>
@@ -548,8 +611,8 @@ export default function AdminDashboard() {
       <main className="admin-main ml-0 flex-1 overflow-x-hidden p-4 sm:p-8 md:ml-64">
         <div className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6">
           <Routes>
-            <Route index element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
-            <Route path="overview" element={<Overview iotData={iotData} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
+            <Route index element={<Overview iotData={iotData} environmentHistory={environmentHistory} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
+            <Route path="overview" element={<Overview iotData={iotData} environmentHistory={environmentHistory} todayDate={todayDate} todaysOrdersCount={todaysOrdersCount} pendingOrders={pendingOrderItems} verificationLoadingId={verificationLoadingId} onApprovePayment={handleApprovePayment} onOpenReceiptPreview={openReceiptPreview} onOpenRejectModal={openRejectModal} />} />
             <Route
               path="orders"
               element={
@@ -581,7 +644,7 @@ export default function AdminDashboard() {
             <Route path="deliveries" element={<Deliveries />} />
             <Route path="forecast" element={<DemandForecastPage />} />
             <Route path="revenue-reports" element={<RevenueReports userRole={userRole} />} />
-            <Route path="*" element={<Overview iotData={iotData} todayDate={todayDate} />} />
+            <Route path="*" element={<Overview iotData={iotData} environmentHistory={environmentHistory} todayDate={todayDate} />} />
           </Routes>
         </div>
       </main>
