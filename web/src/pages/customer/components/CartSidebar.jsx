@@ -52,7 +52,7 @@ export default function CartSidebar({
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        {isCheckoutConfirmOpen && (
+        {isCheckoutConfirmOpen && !isRescheduling && (
           <div className="absolute inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 p-3 sm:p-5">
             <div className="my-auto max-h-full w-full max-w-md overflow-y-auto rounded-[1.5rem] bg-white p-4 shadow-2xl sm:p-5">
               <div className="mb-4 flex items-start gap-3">
@@ -439,7 +439,7 @@ export default function CartSidebar({
             {orderStatus === 'idle' && cartItems.length > 0 && (
               <>
                 <ShoppingCart className="mr-2 h-5 w-5" />
-                {isRescheduling ? 'Confirm New Delivery Date' : 'Check Out'}
+                {isRescheduling ? 'Confirm' : 'Check Out'}
               </>
             )}
             {orderStatus === 'processing' && (

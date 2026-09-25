@@ -51,6 +51,14 @@ export default function Orders({
     setOrdersPage(1);
   };
 
+  const getDateFilterValue = (daysFromToday = 0) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromToday);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  };
+
   const openApproveConfirm = (order) => {
     setConfirmAction({ type: 'approve', order });
   };
@@ -84,10 +92,6 @@ export default function Orders({
     today.setHours(0, 0, 0, 0);
     const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
 
-    if (order.isRescheduledOrder) {
-      return { label: 'Reschedule Request', className: 'bg-cyan-100 text-cyan-700' };
-    }
-
     if (normalizedStatus === 'failed' || paymentStatus === 'failed') {
       return { label: 'Failed', className: 'bg-orange-100 text-orange-700' };
     }
@@ -106,6 +110,10 @@ export default function Orders({
       || paymentStatus === 'delivered'
     ) {
       return { label: normalizedStatus === 'picked up' ? 'Picked Up' : 'Delivered', className: 'bg-green-100 text-green-700' };
+    }
+
+    if (order.isRescheduledOrder) {
+      return { label: 'Reschedule Request', className: 'bg-cyan-100 text-cyan-700' };
     }
 
     if ((paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending') && isPastOrder) {
@@ -349,13 +357,38 @@ export default function Orders({
               className="w-44 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
           </div>
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => handleOrderDateChange(getDateFilterValue())}
+              className={`rounded-full px-3 py-2 text-sm font-semibold transition ${activeDateFilter === getDateFilterValue() ? 'bg-[#4091c9] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOrderDateChange(getDateFilterValue(1))}
+              className={`rounded-full px-3 py-2 text-sm font-semibold transition ${activeDateFilter === getDateFilterValue(1) ? 'bg-[#4091c9] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Tomorrow
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOrderDateChange('')}
+              className={`rounded-full px-3 py-2 text-sm font-semibold transition ${!activeDateFilter ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              All dates
+            </button>
+          </div>
           <input
             type="date"
             value={activeDateFilter}
-              onChange={(event) => handleOrderDateChange(event.target.value)}
+            onChange={(event) => handleOrderDateChange(event.target.value)}
+            aria-label="Filter orders by date"
             className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4091c9]"
           />
           <button
+            type="button"
             onClick={() => {
               setActiveDateFilter('');
               setSearchTerm('');

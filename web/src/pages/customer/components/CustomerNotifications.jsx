@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, Check, CircleCheck, PackageCheck } from 'lucide-react';
+import { AlertCircle, Bell, Check, CircleCheck, PackageCheck } from 'lucide-react';
 
 const getStatusLabel = (order) => {
   const status = String(order?.status || '').trim().toLowerCase();
   const paymentStatus = String(order?.paymentStatus || '').trim().toLowerCase();
   const deliveryStatus = String(order?.deliveryStatus || '').trim().toLowerCase();
+
+  if (
+    ['failed', 'not delivered', 'undelivered'].includes(status)
+    || ['failed', 'not delivered', 'undelivered'].includes(deliveryStatus)
+    || ['failed', 'rejected'].includes(paymentStatus)
+  ) return 'Failed';
 
   if (
     ['delivered', 'completed', 'done', 'finished', 'delivery completed'].includes(status)
@@ -80,6 +86,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
       signature: getOrderSignature(order),
       statusLabel,
       isDelivered: statusLabel === 'Delivered',
+      isFailed: statusLabel === 'Failed',
       isNewOrder: statusLabel === 'Pending Payment Verification',
       dateLabel: formatNotificationDate(order),
     };
@@ -109,7 +116,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
   const handleNotificationClick = (notification) => {
     markAsRead(notification.signature);
     setIsOpen(false);
-    onViewOrders(notification.isDelivered ? 'completed' : 'active');
+    onViewOrders(notification.isDelivered ? 'completed' : notification.isFailed ? 'failed' : 'active');
   };
 
   return (
@@ -156,19 +163,21 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
                   onClick={() => handleNotificationClick(notification)}
                   className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left transition hover:bg-sky-50 ${isUnread ? 'bg-sky-50/70' : 'bg-white'}`}
                 >
-                  <span className={`mt-0.5 rounded-full p-2 ${notification.isDelivered ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-[#4091c9]'}`}>
-                    {notification.isDelivered ? <PackageCheck className="h-4 w-4" /> : <CircleCheck className="h-4 w-4" />}
+                  <span className={`mt-0.5 rounded-full p-2 ${notification.isDelivered ? 'bg-emerald-100 text-emerald-700' : notification.isFailed ? 'bg-orange-100 text-orange-700' : 'bg-sky-100 text-[#4091c9]'}`}>
+                    {notification.isDelivered ? <PackageCheck className="h-4 w-4" /> : notification.isFailed ? <AlertCircle className="h-4 w-4" /> : <CircleCheck className="h-4 w-4" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-slate-900">
-                        {notification.isDelivered ? 'Order delivered' : notification.isNewOrder ? 'Order placed' : 'Order status updated'}
+                        {notification.isDelivered ? 'Order delivered' : notification.isFailed ? 'Order failed' : notification.isNewOrder ? 'Order placed' : 'Order status updated'}
                       </span>
                       {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-600">
                       {notification.isDelivered
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was delivered and moved to the Completed tab.`
+                        : notification.isFailed
+                        ? `Your order #${notification.id.slice(0, 6).toUpperCase()} could not be completed. Please review the Failed orders tab.`
                         : notification.isNewOrder
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was submitted and is awaiting payment verification.`
                         : `Order #${notification.id.slice(0, 6).toUpperCase()} is ${notification.statusLabel}.`}

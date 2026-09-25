@@ -147,40 +147,35 @@ export default function AccountView({
                 <span className="text-sm font-semibold text-slate-700">Email</span>
                 <input
                   value={accountInfo.email}
-                  onChange={(event) => onAccountChange('email', event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 focus:border-[#4091c9] focus:outline-none focus:ring-2 focus:ring-[#4091c9]/20"
+                  disabled
+                  aria-readonly="true"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none disabled:cursor-default disabled:opacity-100"
                   placeholder="you@example.com"
                 />
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">Phone Number</span>
                 <div className="mt-2 flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition focus-within:border-[#4091c9] focus-within:ring-2 focus-within:ring-[#4091c9]/20">
-                  <span className="mr-3 flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">09</span>
+                  <span className="mr-3 flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">+63</span>
                   <div className="mr-3 h-6 w-px bg-slate-200" />
                   <input
-                    type="text"
+                    type="tel"
                     inputMode="numeric"
-                    maxLength={11}
-                    value={(accountInfo.contactNumber || '').replace(/^09/, '').replace(/\D/g, '').replace(/(.{3})(?=.)/g, '$1-').slice(0, 11)}
-                    onFocus={() => {
-                      if (!accountInfo.contactNumber) {
-                        onAccountChange('contactNumber', '09');
-                      }
-                    }}
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    value={(accountInfo.contactNumber || '').replace(/^0/, '').replace(/\D/g, '').slice(0, 10)}
                     onChange={(event) => {
-                      const digits = event.target.value.replace(/\D/g, '').slice(0, 9);
-                      const nextValue = `09${digits}`;
-                      onAccountChange('contactNumber', nextValue);
+                      onAccountChange('contactNumber', sanitizePhoneNumberInput(event.target.value));
                     }}
                     className="w-full border-0 bg-transparent text-slate-900 outline-none"
-                    placeholder="XXX-XXX-XXX"
+                    placeholder="9171234567"
                     autoComplete="tel"
                     required
                   />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
-                  <p className="text-slate-500">Enter 9 digits after 09</p>
-                  <p className="font-medium text-slate-600">{Math.min((accountInfo.contactNumber || '').replace(/^09/, '').replace(/\D/g, '').length, 9)}/9</p>
+                  <p className="text-slate-500">Enter 10 digits after +63</p>
+                  <p className="font-medium text-slate-600">{Math.min((accountInfo.contactNumber || '').replace(/^0/, '').replace(/\D/g, '').length, 10)}/10</p>
                 </div>
               </label>
             </div>

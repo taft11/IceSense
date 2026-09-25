@@ -853,7 +853,7 @@ export default function CustomerPortal() {
         total: cartSubtotal,
         status: isRescheduling ? 'Reschedule Request' : 'Pending Payment Verification',
         paymentMethod,
-        paymentStatus: isRescheduling ? 'PAID' : 'PENDING_PAYMENT_VERIFICATION',
+        paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
         fulfillmentMethod,
         readyForDelivery: false,
         receiptUrl,
@@ -884,10 +884,29 @@ export default function CustomerPortal() {
             : null,
       };
 
-          stockReservations = await reserveStockForOrder(cartItems);
-      const orderDocRef = await addDoc(ordersRef, orderPayload);
-          orderCreated = true;
-      await updateDoc(orderDocRef, { orderId: orderDocRef.id });
+      let savedOrderId;
+      if (isRescheduling && reschedulingOrder?.id) {
+        const rescheduleUpdate = { ...orderPayload };
+        delete rescheduleUpdate.createdAt;
+        await updateDoc(doc(db, 'orders', reschedulingOrder.id), {
+          ...rescheduleUpdate,
+          orderId: reschedulingOrder.id,
+          assignedDriverId: null,
+          assignedDriverName: '',
+          assignedDriverEmail: '',
+          assignedDriverPhone: '',
+          assignedDriverContact: '',
+          deliveryStatus: 'Unassigned',
+          updatedAt: serverTimestamp(),
+        });
+        savedOrderId = reschedulingOrder.id;
+      } else {
+        stockReservations = await reserveStockForOrder(cartItems);
+        const orderDocRef = await addDoc(ordersRef, orderPayload);
+        await updateDoc(orderDocRef, { orderId: orderDocRef.id });
+        savedOrderId = orderDocRef.id;
+      }
+      orderCreated = true;
 
       setCartItems([]);
       setIsRescheduling(false);
@@ -895,7 +914,7 @@ export default function CustomerPortal() {
       setReceiptFile(null);
       setReceiptReferenceNumber('');
       setOrderStatus('success');
-      setPendingOrderId(orderDocRef.id);
+      setPendingOrderId(savedOrderId);
       setIsCartOpen(false);
       setIsPendingOrderModalOpen(true);
       setQuantity(1);

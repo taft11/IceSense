@@ -24,6 +24,7 @@ export default function Login() {
   const [lastName, setLastName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,6 +94,8 @@ export default function Login() {
     setError('');
     setPassword('');
     setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setPasswordFocused(false);
     setFirstName('');
     setMiddleName('');
@@ -143,7 +146,7 @@ export default function Login() {
                   />
                   <label
                     htmlFor="firstName"
-                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                    className="absolute left-0 top-0 whitespace-nowrap text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
                   >
                     First Name <span className="text-gray-400">*</span>
                   </label>
@@ -160,7 +163,7 @@ export default function Login() {
                   />
                   <label
                     htmlFor="middleName"
-                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                    className="absolute left-0 top-0 whitespace-nowrap text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
                   >
                     Middle Name
                   </label>
@@ -185,19 +188,24 @@ export default function Login() {
                 </div>
 
                 <div className="relative sm:col-span-2">
-                  <input
-                    id="contactNumber"
-                    type="tel"
-                    inputMode="numeric"
-                    required={!isLogin}
-                    value={contactNumber}
-                    onChange={(e) => setContactNumber(sanitizePhoneNumberInput(e.target.value))}
-                    placeholder=" "
-                    className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
-                  />
+                  <div className="flex items-end border-b-2 border-gray-200 pt-3 focus-within:border-[#4091c9] transition-colors">
+                    <span className="pb-2 pr-2 text-gray-500" aria-hidden="true">+63</span>
+                    <input
+                      id="contactNumber"
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={10}
+                      required={!isLogin}
+                      value={contactNumber.replace(/^0/, '')}
+                      onChange={(e) => setContactNumber(sanitizePhoneNumberInput(e.target.value))}
+                      placeholder=" "
+                      className="peer w-full pb-2 border-0 bg-transparent text-gray-900 focus:ring-0 focus:outline-none"
+                    />
+                  </div>
                   <label
                     htmlFor="contactNumber"
-                    className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
+                    className="absolute left-0 top-0 text-xs text-gray-400 pointer-events-none font-medium"
                   >
                     Phone Number <span className="text-gray-400">*</span>
                   </label>
@@ -219,7 +227,7 @@ export default function Login() {
                 htmlFor="email"
                 className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
               >
-                Email Address
+                Email Address {!isLogin && <span className="text-gray-400">*</span>}
               </label>
             </div>
 
@@ -239,7 +247,7 @@ export default function Login() {
                 htmlFor="password"
                 className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
               >
-                Password
+                Password {!isLogin && <span className="text-gray-400">*</span>}
               </label>
               <button
                 type="button"
@@ -268,19 +276,27 @@ export default function Login() {
               <div className="relative animate-fade-in">
                 <input
                   id="confirmPassword"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   required={!isLogin}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder=" "
-                  className="peer w-full pb-2 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
+                  className="peer w-full pb-2 pr-10 border-0 border-b-2 border-gray-200 bg-transparent text-gray-900 focus:border-[#4091c9] focus:ring-0 focus:outline-none transition-colors"
                 />
                 <label
                   htmlFor="confirmPassword"
                   className="absolute left-0 top-0 text-gray-400 transition-all duration-200 pointer-events-none transform -translate-y-3 text-xs peer-placeholder-shown:translate-y-0 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-focus:-translate-y-3 peer-focus:text-xs peer-focus:text-[#4091c9] font-medium"
                 >
-                  Confirm Password
+                  Confirm Password <span className="text-gray-400">*</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  className="absolute inset-y-0 right-0 pb-2 flex items-center text-gray-400 hover:text-[#4091c9] transition-colors focus:outline-none"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             )}
 

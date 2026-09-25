@@ -96,10 +96,11 @@ export default function AdminDashboard() {
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
     const pickupStatus = (order.pickupStatus || '').toLowerCase();
+    const hasRescheduleRequest = Boolean(order.isRescheduledOrder || order.rescheduleRequestedAt || order.rescheduledAt);
 
     if (
-      normalizedStatus === 'failed'
-      || paymentStatus === 'failed'
+      !hasRescheduleRequest
+      && (normalizedStatus === 'failed' || paymentStatus === 'failed')
     ) {
       return 'failed';
     }
@@ -328,6 +329,7 @@ export default function AdminDashboard() {
         (snapshot) => {
           const parsedOrders = snapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((order) => Array.isArray(order.items) && order.items.length > 0)
             .sort((a, b) => {
               const scheduleDifference = getOrderScheduleTimestamp(b) - getOrderScheduleTimestamp(a);
               if (scheduleDifference !== 0) return scheduleDifference;
@@ -509,7 +511,7 @@ export default function AdminDashboard() {
               <Link to="/admin/orders" className={`flex w-full items-center justify-between rounded-r-xl border-l-4 px-3 py-2.5 text-sm transition-all ${activeView === 'orders' ? 'border-sky-600 bg-sky-50/60 text-sky-700 font-semibold' : 'border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <span>Orders</span>
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                  {pendingOrders || 3}
+                  {pendingOrders}
                 </span>
               </Link>
             </li>
