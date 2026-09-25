@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bell, Check, CircleAlert, FileText } from 'lucide-react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { AlertTriangle, Bell, Check, CircleAlert, Trash2 } from 'lucide-react';
+
+const PENDING_APPROVAL_NOTIFICATION_THRESHOLD = 5;
+const UNASSIGNED_DELIVERY_NOTIFICATION_THRESHOLD = 3;
 
 const formatSensorValue = (value, fallback) => {
   if (value === undefined || value === null || value === '' || value === 'Loading...') return fallback;
@@ -21,11 +24,62 @@ const formatRelativeTime = (timestamp, now = Date.now()) => {
   return `${Math.floor(elapsedHours / 24)}d ago`;
 };
 
-export default function AdminNotificationBell({ iotData }) {
+const notificationIcons = {
+  'water-tank-level': CircleAlert,
+  'freezer-temperature': AlertTriangle,
+};
+
+const getStoredCriticalNotifications = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('icesense-admin-critical-notifications-v1') || '[]');
+    return Array.isArray(saved)
+      ? saved.map((notification) => ({
+        ...notification,
+        icon: notificationIcons[notification.id],
+      })).filter((notification) => notification.icon)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const criticalNotificationsReducer = (current, action) => {
+  if (action.type === 'delete') {
+    return current.filter((notification) => notification.id !== action.notificationId);
+  }
+
+  if (action.type !== 'sync') return current;
+
+  const next = [...current];
+  action.alerts.forEach(({ id, isCritical, ...alert }) => {
+    const existingIndex = next.findIndex((notification) => notification.id === id);
+
+    if (existingIndex >= 0) {
+      next[existingIndex] = isCritical
+        ? { ...next[existingIndex], ...alert, resolved: false }
+        : { ...next[existingIndex], resolved: true, detail: 'Reading is back within the safe range. Delete this notification when it is no longer needed.' };
+    } else if (isCritical) {
+      next.push({ ...alert, id, resolved: false });
+    }
+  });
+
+  return next;
+};
+
+export default function AdminNotificationBell({
+  iotData,
+  pendingOrders = 0,
+  unassignedDeliveries = 0,
+  processingPickupOrders = 0,
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('critical');
+  const [criticalNotifications, dispatchCriticalNotifications] = useReducer(criticalNotificationsReducer, undefined, getStoredCriticalNotifications);
+  const [dismissedSystemIds, setDismissedSystemIds] = useState(new Set());
   const [readIds, setReadIds] = useState(new Set());
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const bellRef = useRef(null);
 
   useEffect(() => {
@@ -33,7 +87,7 @@ export default function AdminNotificationBell({ iotData }) {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const notifications = useMemo(() => {
+  useEffect(() => {
     const waterLevel = formatSensorValue(iotData?.waterLevel, '0%');
     const temperature = formatSensorValue(iotData?.temperature, 'Threshold warning');
     const waterLevelTimestamp = formatRelativeTime(iotData?.waterLevelUpdatedAt, now);
@@ -43,45 +97,69 @@ export default function AdminNotificationBell({ iotData }) {
     const isTemperatureCritical = Number.isFinite(temperatureValue) && temperatureValue > -15;
     const isWaterLevelCritical = Number.isFinite(waterDistance) && waterDistance >= 58;
 
-    return {
-      critical: [
-        isWaterLevelCritical && {
+    dispatchCriticalNotifications({
+      type: 'sync',
+      alerts: [
+        {
           id: 'water-tank-level',
+          isCritical: isWaterLevelCritical,
           title: `Water tank level ${waterLevel}`,
           detail: 'Water supply requires attention.',
           timestamp: waterLevelTimestamp,
           icon: CircleAlert,
           urgent: true,
         },
-        isTemperatureCritical && {
+        {
           id: 'freezer-temperature',
+          isCritical: isTemperatureCritical,
           title: `Freezer temperature: ${temperature}`,
           detail: `Latest critical reading received ${temperatureTimestamp.toLowerCase()}. Check freezer conditions immediately.`,
           timestamp: temperatureTimestamp,
           icon: AlertTriangle,
           urgent: true,
         },
-      ].filter(Boolean),
-      system: [
-        {
-          id: 'scale-sync',
-          title: 'Automatic scale sync completed',
-          detail: 'ESP32_Scale_01 reported the latest inventory event.',
-          timestamp: '38m ago',
-          icon: FileText,
-          urgent: false,
-        },
-        {
-          id: 'order-log',
-          title: 'Order activity recorded',
-          detail: 'A new customer order is waiting for review.',
-          timestamp: '1h ago',
-          icon: FileText,
-          urgent: false,
-        },
       ],
-    };
+    });
   }, [iotData, now]);
+
+  useEffect(() => {
+    const serializableNotifications = criticalNotifications.map((notification) => {
+      const serializableNotification = { ...notification };
+      delete serializableNotification.icon;
+      return serializableNotification;
+    });
+    window.localStorage.setItem('icesense-admin-critical-notifications-v1', JSON.stringify(serializableNotifications));
+  }, [criticalNotifications]);
+
+  const notifications = useMemo(() => ({
+    critical: criticalNotifications,
+    system: [
+      pendingOrders >= PENDING_APPROVAL_NOTIFICATION_THRESHOLD && {
+        id: 'system-pending-approvals',
+        title: `${pendingOrders} orders awaiting approval`,
+        detail: 'There are too many payment-verification orders waiting for review.',
+        timestamp: 'Current workload',
+        icon: CircleAlert,
+        urgent: true,
+      },
+      unassignedDeliveries >= UNASSIGNED_DELIVERY_NOTIFICATION_THRESHOLD && {
+        id: 'system-unassigned-deliveries',
+        title: `${unassignedDeliveries} deliveries need drivers`,
+        detail: 'Several approved delivery orders do not have a driver assigned.',
+        timestamp: 'Current workload',
+        icon: AlertTriangle,
+        urgent: true,
+      },
+      processingPickupOrders >= 1 && {
+        id: 'system-processing-pickups',
+        title: `${processingPickupOrders} pickup order${processingPickupOrders === 1 ? '' : 's'} processing`,
+        detail: 'Pickup orders are still waiting to be prepared or marked ready for pickup.',
+        timestamp: 'Current workload',
+        icon: CircleAlert,
+        urgent: true,
+      },
+    ].filter(Boolean).filter((notification) => !dismissedSystemIds.has(notification.id)),
+  }), [criticalNotifications, dismissedSystemIds, pendingOrders, unassignedDeliveries, processingPickupOrders]);
 
   const allNotifications = [...notifications.critical, ...notifications.system];
   const unreadCount = allNotifications.filter((notification) => !readIds.has(notification.id)).length;
@@ -97,6 +175,20 @@ export default function AdminNotificationBell({ iotData }) {
   }, []);
 
   const markAllAsRead = () => setReadIds(new Set(allNotifications.map((notification) => notification.id)));
+
+  const deleteNotification = (notificationId) => {
+    if (notificationId.startsWith('system-')) {
+      setDismissedSystemIds((current) => new Set([...current, notificationId]));
+      return;
+    }
+
+    dispatchCriticalNotifications({ type: 'delete', notificationId });
+    setReadIds((current) => {
+      const next = new Set(current);
+      next.delete(notificationId);
+      return next;
+    });
+  };
 
   return (
     <div ref={bellRef} className="relative">
@@ -139,7 +231,9 @@ export default function AdminNotificationBell({ iotData }) {
                 className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-sky-50 text-[#2d75aa]' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 {label}
-                {tab === 'critical' && <span className="ml-1 text-red-500">{notifications.critical.length}</span>}
+                <span className={`ml-1 ${tab === 'critical' ? 'text-red-500' : 'text-slate-400'}`}>
+                  {notifications[tab].length}
+                </span>
               </button>
             ))}
           </div>
@@ -148,8 +242,12 @@ export default function AdminNotificationBell({ iotData }) {
             {visibleNotifications.length === 0 && (
               <div className="px-4 py-8 text-center">
                 <Check className="mx-auto h-6 w-6 text-emerald-500" />
-                <p className="mt-2 text-sm font-semibold text-slate-700">No critical alerts</p>
-                <p className="mt-1 text-xs text-slate-500">All monitored readings are within safe limits.</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">
+                  {activeTab === 'critical' ? 'No critical alerts' : 'No system alerts'}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {activeTab === 'critical' ? 'All monitored readings are within safe limits.' : 'Current order and delivery workloads are within normal limits.'}
+                </p>
               </div>
             )}
             {visibleNotifications.map((notification) => {
@@ -157,24 +255,36 @@ export default function AdminNotificationBell({ iotData }) {
               const isRead = readIds.has(notification.id);
 
               return (
-                <button
+                <div
                   key={notification.id}
-                  type="button"
-                  onClick={() => setReadIds((current) => new Set([...current, notification.id]))}
                   className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${isRead ? 'opacity-60' : ''}`}
                 >
                   <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${notification.urgent ? 'bg-red-50 text-red-600' : 'bg-sky-50 text-[#4091c9]'}`}>
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setReadIds((current) => new Set([...current, notification.id]))}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <span className="flex items-start justify-between gap-2">
                       <span className="text-xs font-bold text-slate-800">{notification.title}</span>
                       {!isRead && <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />}
                     </span>
+                    {notification.resolved && <span className="mt-1 inline-block text-[11px] font-bold uppercase tracking-wide text-emerald-600">Resolved</span>}
                     <span className="mt-1 block text-xs leading-5 text-slate-500">{notification.detail}</span>
                     <span className="mt-1 block text-[11px] font-medium text-slate-400">{notification.timestamp}</span>
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${notification.title}`}
+                    title="Delete notification"
+                    onClick={() => deleteNotification(notification.id)}
+                    className="mt-1 shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               );
             })}
           </div>

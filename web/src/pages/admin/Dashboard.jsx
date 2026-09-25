@@ -241,6 +241,15 @@ export default function AdminDashboard() {
 
     return isDeliveryOrder && isReadyForDelivery && !order.assignedDriverId;
   }).length;
+  const processingPickupOrders = allOrders.filter((order) => {
+    const fulfillmentMethod = String(order?.fulfillment_type || order?.fulfillmentMethod || order?.deliveryType || '').toLowerCase();
+    const pickupStatus = String(order?.pickupStatus || order?.status || '').toLowerCase().replace(/_/g, ' ');
+    const isPickupOrder = fulfillmentMethod.includes('pickup');
+    const isPickedUp = pickupStatus === 'picked up' || pickupStatus === 'released' || Boolean(order?.pickedUpAt);
+    const isReadyForPickup = pickupStatus === 'ready for pickup' || pickupStatus === 'ready' || order?.readyForPickup === true;
+
+    return isPickupOrder && getOrderStatusKey(order) === 'processing' && !isPickedUp && !isReadyForPickup;
+  }).length;
   const todaysOrdersCount = allOrders.filter((order) => {
     const orderDate = getOrderDateValue(order) || (order?.createdAt ? toLocalDateKey(order.createdAt?.toDate?.() || order.createdAt) : null);
     const todayDateKey = toLocalDateKey(new Date());
@@ -560,7 +569,12 @@ export default function AdminDashboard() {
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-gray-200 bg-white p-6 shadow-sm md:flex">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Bella Erin<span className="text-[#4091c9]">.</span></h2>
-          <AdminNotificationBell iotData={iotData} />
+          <AdminNotificationBell
+            iotData={iotData}
+            pendingOrders={pendingOrders}
+            unassignedDeliveries={unassignedDeliveries}
+            processingPickupOrders={processingPickupOrders}
+          />
         </div>
 
         <nav className="flex-1">
