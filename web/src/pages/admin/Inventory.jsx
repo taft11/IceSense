@@ -14,7 +14,7 @@ const defaultProducts = [
     type: 'tube',
     packaging: '5kg',
     weightKg: 5,
-    price: 25,
+    price: 30,
     isMonitoredByScale: true,
   },
   {
@@ -23,7 +23,7 @@ const defaultProducts = [
     type: 'tube',
     packaging: '35kg',
     weightKg: 35,
-    price: 120,
+    price: 140,
     isMonitoredByScale: true,
   },
   {
@@ -32,7 +32,7 @@ const defaultProducts = [
     type: 'tube',
     packaging: '50kg',
     weightKg: 50,
-    price: 150,
+    price: 200,
     isMonitoredByScale: true,
   },
   {
@@ -41,7 +41,7 @@ const defaultProducts = [
     type: 'crushed',
     packaging: 'sack',
     weightKg: 5,
-    price: 180,
+    price: 35,
     isMonitoredByScale: true,
   },
   {
@@ -50,7 +50,7 @@ const defaultProducts = [
     type: 'crushed',
     packaging: 'sack',
     weightKg: 35,
-    price: 140,
+    price: 150,
     isMonitoredByScale: true,
   },
   {
@@ -59,7 +59,7 @@ const defaultProducts = [
     type: 'crushed',
     packaging: 'sack',
     weightKg: 50,
-    price: 150,
+    price: 210,
     isMonitoredByScale: true,
   },
 ];
