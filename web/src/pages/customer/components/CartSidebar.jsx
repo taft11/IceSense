@@ -43,6 +43,7 @@ export default function CartSidebar({
   isExtractingReference,
   onReceiptFileChange,
   receiptError,
+  inventoryNotice,
 }) {
   return (
     <div className={`fixed inset-0 z-40 transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -93,6 +94,13 @@ export default function CartSidebar({
                   <span>₱{orderTotal.toFixed(2)}</span>
                 </div>
               </div>
+
+              {inventoryNotice && (
+                <div role="alert" className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{inventoryNotice}</p>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-gray-200 bg-white p-3.5 sm:p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
@@ -293,6 +301,16 @@ export default function CartSidebar({
                         ₱{(item.price * item.quantity).toFixed(2)}
                       </span>
                     </div>
+                    {getRemainingStock(item.productId) <= 0 && (
+                      <div role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          {getRemainingStock(item.productId) < 0
+                            ? 'Your cart quantity is above current available stock. Reduce the quantity before checkout.'
+                            : 'This is the maximum quantity currently available.'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}

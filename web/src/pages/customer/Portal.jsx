@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { onValue, ref, runTransaction } from 'firebase/database';
+import { get, onValue, ref, runTransaction } from 'firebase/database';
 import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { createWorker } from 'tesseract.js';
 import { auth, database, db, storage } from '../../services/firebase';
@@ -52,6 +52,29 @@ const PRODUCT_STOCK_PATHS = {
   'crushed-crate': ['crushed_ice', '5kg_sacks'],
   'crushed-sack': ['crushed_ice', '35kg_sacks'],
   'crushed-50': ['crushed_ice', '50kg_sacks'],
+};
+
+const getProductStocks = (inventory) => Object.fromEntries(
+  PRODUCTS.map((product) => {
+    const [sectionKey, stockKey] = PRODUCT_STOCK_PATHS[product.id] || [];
+    return [product.id, Number(inventory?.[sectionKey]?.sacks_breakdown?.[stockKey] || 0)];
+  })
+);
+
+const reconcileCartWithStocks = (items, stockByProduct) => {
+  const changes = [];
+  const adjustedItems = items
+    .map((item) => {
+      if (!Object.prototype.hasOwnProperty.call(stockByProduct, item.productId)) return item;
+
+      const availableStock = Math.max(0, Number(stockByProduct[item.productId] || 0));
+      const quantity = Math.min(Number(item.quantity || 0), availableStock);
+      if (quantity < item.quantity) changes.push({ name: item.name, quantity });
+      return { ...item, quantity };
+    })
+    .filter((item) => item.quantity > 0);
+
+  return { adjustedItems, changes };
 };
 
 const getStockRequests = (items) => {
@@ -301,6 +324,7 @@ export default function CustomerPortal() {
   const [cartAddSuccess, setCartAddSuccess] = useState(false);
   const [flyToCart, setFlyToCart] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '' });
+  const [inventoryNotice, setInventoryNotice] = useState('');
   const [pendingOrderId, setPendingOrderId] = useState(null);
   const [isPendingOrderModalOpen, setIsPendingOrderModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -411,21 +435,34 @@ export default function CustomerPortal() {
     }
   }, [activeUserId, cartItems]);
 
+  const handleInventoryUpdate = useEffectEvent((inventory) => {
+    const nextStocks = getProductStocks(inventory);
+    setStocks(nextStocks);
+
+    if (orderStatus === 'processing' || isRescheduling || cartItems.length === 0) return;
+    if (!cartItems.every((item) => Object.prototype.hasOwnProperty.call(nextStocks, item.productId))) return;
+
+    const { adjustedItems, changes } = reconcileCartWithStocks(cartItems, nextStocks);
+    if (changes.length === 0) return;
+
+    const changedProducts = changes.map(({ name, quantity }) => `${quantity} ${name}`).join(', ');
+    const message = `Inventory changed. Your cart is now limited to ${changedProducts}. Review the updated total and upload a new payment receipt.`;
+    setCartItems(adjustedItems);
+    setReceiptFile(null);
+    setReceiptReferenceNumber('');
+    setDetectedReceiptReferenceNumber('');
+    setIsReceiptReferenceConfirmed(false);
+    setIsReceiptReferenceEditing(false);
+    setInventoryNotice(message);
+    setReceiptError('');
+    setToast({ visible: true, message });
+  });
+
   useEffect(() => {
     const inventoryRef = ref(database, 'inventory/scale_1');
     const unsubscribeInventory = onValue(
       inventoryRef,
-      (snapshot) => {
-        const inventory = snapshot.val() || {};
-        const nextStocks = Object.fromEntries(
-          PRODUCTS.map((product) => {
-            const [sectionKey, stockKey] = PRODUCT_STOCK_PATHS[product.id] || [];
-            return [product.id, Number(inventory?.[sectionKey]?.sacks_breakdown?.[stockKey] || 0)];
-          })
-        );
-
-        setStocks(nextStocks);
-      },
+      (snapshot) => handleInventoryUpdate(snapshot.val() || {}),
       (error) => {
         console.error('Failed to load live inventory limits', error);
         setStocks({});
@@ -613,7 +650,24 @@ export default function CustomerPortal() {
   };
 
   const increaseQuantity = () => {
-    if (quantity < activeStock) setQuantity((prev) => prev + 1);
+    if (quantity < activeStock) {
+      const nextQuantity = quantity + 1;
+      setQuantity(nextQuantity);
+      if (nextQuantity === activeStock) {
+        setToast({
+          visible: true,
+          message: `Maximum available is ${activeStock} ${activeProduct.name}.`,
+        });
+      }
+      return;
+    }
+
+    setToast({
+      visible: true,
+      message: activeStock > 0
+        ? `Maximum available is ${activeStock} ${activeProduct.name}.`
+        : `No ${activeProduct.name} are currently available.`,
+    });
   };
 
   const decreaseQuantity = () => {
@@ -627,7 +681,17 @@ export default function CustomerPortal() {
       setQuantity(1);
       return;
     }
-    setQuantity(Math.min(nextQuantity, activeStock));
+    if (nextQuantity > activeStock) {
+      setQuantity(activeStock);
+      setToast({
+        visible: true,
+        message: activeStock > 0
+          ? `Maximum available is ${activeStock} ${activeProduct.name}. Quantity set to the maximum.`
+          : `No ${activeProduct.name} are currently available.`,
+      });
+      return;
+    }
+    setQuantity(nextQuantity);
   };
 
   const startFlyToCartAnimation = (sourceElement) => {
@@ -667,7 +731,10 @@ export default function CustomerPortal() {
     const remainingStock = getRemainingStockForProduct(selectedProductId);
     const qtyToAdd = Math.min(quantity, Math.max(remainingStock, 0));
 
-    if (qtyToAdd <= 0) return;
+    if (qtyToAdd <= 0) {
+      setToast({ visible: true, message: `No ${activeProduct.name} are currently available to add.` });
+      return;
+    }
 
     startFlyToCartAnimation(event.nativeEvent.submitter);
 
@@ -694,7 +761,12 @@ export default function CustomerPortal() {
     setQuantity(1);
     setOrderStatus('idle');
     setCartAddSuccess(true);
-    setToast({ visible: true, message: `${qtyToAdd} ${activeProduct.name} added to cart.` });
+    setToast({
+      visible: true,
+      message: qtyToAdd < quantity
+        ? `Only ${qtyToAdd} ${activeProduct.name} available; added ${qtyToAdd} to your cart.`
+        : `${qtyToAdd} ${activeProduct.name} added to cart.`,
+    });
     setTimeout(() => setCartAddSuccess(false), 1200);
   };
 
@@ -962,6 +1034,7 @@ export default function CustomerPortal() {
       setReschedulingOrder(null);
       setReceiptFile(null);
       setReceiptReferenceNumber('');
+      setInventoryNotice('');
       setOrderStatus('success');
       setPendingOrderId(savedOrderId);
       setIsCartOpen(false);
@@ -976,11 +1049,38 @@ export default function CustomerPortal() {
       }
 
       console.error('Order submission failed', error);
-      setOrdersError(
-        error.message === 'INSUFFICIENT_STOCK'
-          ? 'Some items are no longer available in the requested quantity. Please update your cart and try again.'
-          : 'Your order could not be saved. Please try again.'
-      );
+      if (error.message === 'INSUFFICIENT_STOCK') {
+        try {
+          const inventorySnapshot = await get(ref(database, 'inventory/scale_1'));
+          const currentStocks = getProductStocks(inventorySnapshot.val() || {});
+          const { adjustedItems, changes } = reconcileCartWithStocks(cartItems, currentStocks);
+          setStocks(currentStocks);
+
+          if (changes.length > 0) {
+            const changedProducts = changes.map(({ name, quantity }) => `${quantity} ${name}`).join(', ');
+            const message = `Stock changed before checkout completed. Your cart is now limited to ${changedProducts}. Review the updated total and upload a new payment receipt.`;
+            setCartItems(adjustedItems);
+            setReceiptFile(null);
+            setReceiptReferenceNumber('');
+            setDetectedReceiptReferenceNumber('');
+            setIsReceiptReferenceConfirmed(false);
+            setIsReceiptReferenceEditing(false);
+            setInventoryNotice(message);
+            setReceiptError('');
+            setIsCartOpen(true);
+            setIsCheckoutConfirmOpen(true);
+            setToast({ visible: true, message });
+            setOrderStatus('idle');
+            return;
+          }
+        } catch (inventoryError) {
+          console.error('Failed to refresh inventory after checkout conflict', inventoryError);
+        }
+
+        setReceiptError('Some items are no longer available in the requested quantity. Please review your cart and try again.');
+      } else {
+        setReceiptError('Your order could not be saved. Please try again.');
+      }
       setOrderStatus('idle');
     }
   };
@@ -1457,6 +1557,7 @@ export default function CustomerPortal() {
         isExtractingReference={isExtractingReference}
         onReceiptFileChange={handleReceiptFileChange}
         receiptError={receiptError}
+        inventoryNotice={inventoryNotice}
       />
 
       <PendingOrderConfirmationModal

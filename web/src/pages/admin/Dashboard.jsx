@@ -54,9 +54,11 @@ export default function AdminDashboard() {
     humidity: 'Loading...',
     waterLevel: 'Loading...',
     waterDistance: null,
+    waterPercent: null,
     temperatureUpdatedAt: null,
     waterLevelUpdatedAt: null,
     stockProducedKg: 0,
+    inventoryCounts: null,
     activeTrucks: 3,
   });
   const [allOrders, setAllOrders] = useState([]);
@@ -315,6 +317,7 @@ export default function AdminDashboard() {
           humidity: Number.isFinite(hum) ? `${hum.toFixed(1)}%` : 'N/A',
           // raw numeric distance (cm) from sensor to water surface
           waterDistance: Number.isFinite(dist) ? dist : null,
+          waterPercent,
           // legacy/secondary textual display preserved
           waterLevel: nextWaterLevel,
           temperatureUpdatedAt: prev.temperature === nextTemperature ? prev.temperatureUpdatedAt : snapshotTimestamp,
@@ -348,6 +351,20 @@ export default function AdminDashboard() {
       setIotData((prev) => ({
         ...prev,
         stockProducedKg: totalKg,
+        inventoryCounts: {
+          'tube-5': Object.prototype.hasOwnProperty.call(scaleSections.tube.sacks_breakdown || {}, '5kg_sacks')
+            ? Number(scaleSections.tube.sacks_breakdown['5kg_sacks']) : null,
+          'tube-35': Object.prototype.hasOwnProperty.call(scaleSections.tube.sacks_breakdown || {}, '35kg_sacks')
+            ? Number(scaleSections.tube.sacks_breakdown['35kg_sacks']) : null,
+          'tube-50': Object.prototype.hasOwnProperty.call(scaleSections.tube.sacks_breakdown || {}, '50kg_sacks')
+            ? Number(scaleSections.tube.sacks_breakdown['50kg_sacks']) : null,
+          'crushed-crate': Object.prototype.hasOwnProperty.call(scaleSections.crushed.sacks_breakdown || {}, '5kg_sacks')
+            ? Number(scaleSections.crushed.sacks_breakdown['5kg_sacks']) : null,
+          'crushed-sack': Object.prototype.hasOwnProperty.call(scaleSections.crushed.sacks_breakdown || {}, '35kg_sacks')
+            ? Number(scaleSections.crushed.sacks_breakdown['35kg_sacks']) : null,
+          'crushed-50': Object.prototype.hasOwnProperty.call(scaleSections.crushed.sacks_breakdown || {}, '50kg_sacks')
+            ? Number(scaleSections.crushed.sacks_breakdown['50kg_sacks']) : null,
+        },
       }));
     });
 

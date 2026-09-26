@@ -1,4 +1,4 @@
-import { CheckCircle, Minus, Package, Plus, ShoppingCart, Snowflake } from 'lucide-react';
+import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, Snowflake } from 'lucide-react';
 
 export default function OrderView({
   products,
@@ -157,7 +157,7 @@ export default function OrderView({
           <form onSubmit={onAddToCart}>
             <div className="mb-6">
               <div className="flex w-fit items-center space-x-4 rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                <button type="button" onClick={onDecrease} className="rounded-xl border border-slate-200 bg-white p-3 text-slate-800 shadow-sm transition hover:bg-slate-100">
+                <button type="button" onClick={onDecrease} aria-label="Decrease quantity" className="rounded-xl border border-slate-200 bg-white p-3 text-slate-800 shadow-sm transition hover:bg-slate-100">
                   <Minus className="h-5 w-5" />
                 </button>
                 <input
@@ -169,7 +169,7 @@ export default function OrderView({
                   aria-label="Quantity"
                   className="no-spinner w-16 bg-transparent text-center text-2xl font-bold focus:outline-none"
                 />
-                <button type="button" onClick={onIncrease} className="rounded-lg border border-gray-100 bg-white p-3 text-gray-800 shadow-sm transition hover:bg-gray-100" disabled={quantity >= activeStock}>
+                <button type="button" onClick={onIncrease} aria-label="Increase quantity" className="rounded-lg border border-gray-100 bg-white p-3 text-gray-800 shadow-sm transition hover:bg-gray-100">
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
@@ -181,6 +181,18 @@ export default function OrderView({
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{quantity} item{quantity > 1 ? 's' : ''} × ₱{(activeProduct?.price ?? 0).toFixed(2)} each</p>
               </div>
+              {remainingStock <= 0 && (
+                <div role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {activeStock <= 0
+                      ? 'This package is currently out of stock.'
+                      : remainingStock < 0
+                        ? 'Your cart quantity is above current available stock. Reduce it in your cart before checkout.'
+                        : 'You have added all currently available stock to your cart.'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
