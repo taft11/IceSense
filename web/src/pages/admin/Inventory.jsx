@@ -539,10 +539,6 @@ export default function Inventory() {
           <h3 className="text-lg font-bold text-gray-800">Live Overview</h3>
         </div>
 
-        <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          {loadingMessage || 'Inventory is synced with Firestore and scale telemetry.'}
-        </div>
-
         {/* UI optimization: summary metrics now live in a compact horizontal banner above the product grid. */}
         <div className="mb-5 grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-3">
           <div className="rounded-xl bg-white p-3.5 shadow-sm">

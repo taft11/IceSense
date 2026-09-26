@@ -6,6 +6,8 @@ export default function CartSidebar({
   onClose,
   cartItems,
   cartSubtotal,
+  deliveryFee,
+  orderTotal,
   cartItemCount,
   orderStatus,
   isRescheduling,
@@ -29,6 +31,7 @@ export default function CartSidebar({
   onToggleDelivery,
   isCheckoutConfirmOpen,
   hasAddress,
+  hasPricedDeliveryAddress,
   receiptFile,
   receiptReferenceNumber,
   detectedReceiptReferenceNumber,
@@ -71,12 +74,23 @@ export default function CartSidebar({
                   <p className="mt-1 font-semibold text-gray-900">{cartItemCount}</p>
                 </div>
                 <div className="px-2">
-                  <span>Total</span>
+                  <span>Subtotal</span>
                   <p className="mt-1 font-semibold text-gray-900">₱{cartSubtotal.toFixed(2)}</p>
                 </div>
                 <div className="pl-2">
                   <span>{fulfillmentMethod === 'pickup' ? 'Pickup' : 'Delivery'}</span>
                   <p className="mt-1 truncate font-semibold text-gray-900">{deliveryDateHeading}</p>
+                </div>
+              </div>
+
+              <div className="mb-3 space-y-1 rounded-xl bg-white px-3 py-2 text-sm">
+                <div className="flex justify-between text-gray-600">
+                  <span>Delivery fee</span>
+                  <span>{deliveryFee == null ? 'Add map pin' : `₱${deliveryFee.toFixed(2)}`}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-gray-900">
+                  <span>Order total</span>
+                  <span>₱{orderTotal.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -415,26 +429,39 @@ export default function CartSidebar({
             </>
           )}
 
+          <div className="mb-1 flex items-center justify-between text-sm text-gray-600">
+            <span>Items subtotal</span>
+            <span>₱{cartSubtotal.toFixed(2)}</span>
+          </div>
+          <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+            <span>Delivery fee</span>
+            <span>{deliveryFee == null ? 'Map pin required' : `₱${deliveryFee.toFixed(2)}`}</span>
+          </div>
           <div className="mb-4 flex items-center justify-between text-lg font-bold text-gray-800">
             <span>Total</span>
-            <span>₱{cartSubtotal.toFixed(2)}</span>
+            <span>₱{orderTotal.toFixed(2)}</span>
           </div>
           {!hasAddress && (
             <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Add a delivery address first to continue checkout.
             </div>
           )}
+          {hasAddress && fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress && (
+            <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Add a map pin to your default address to calculate the delivery fee.
+            </div>
+          )}
           <button
             type="button"
             onClick={onCheckout}
-            disabled={orderStatus !== 'idle' || cartItems.length === 0}
+            disabled={orderStatus !== 'idle' || cartItems.length === 0 || (fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress)}
             className={`flex w-full items-center justify-center rounded-2xl p-4 text-lg font-bold transition ${
-              orderStatus === 'idle' && cartItems.length > 0
+              orderStatus === 'idle' && cartItems.length > 0 && (fulfillmentMethod === 'pickup' || hasPricedDeliveryAddress)
                 ? 'bg-[#4091c9] text-white hover:bg-[#2d75aa]'
                 : ''
             } ${orderStatus === 'processing' ? 'cursor-not-allowed bg-[#7aa8d1] text-white' : ''} ${
               orderStatus === 'success' ? 'bg-green-500 text-white' : ''
-            } ${cartItems.length === 0 ? 'cursor-not-allowed bg-gray-200 text-gray-500' : ''}`}
+            } ${cartItems.length === 0 || (fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress) ? 'cursor-not-allowed bg-gray-200 text-gray-500' : ''}`}
           >
             {orderStatus === 'idle' && cartItems.length > 0 && (
               <>
@@ -453,6 +480,8 @@ export default function CartSidebar({
               </>
             )}
             {cartItems.length === 0 && 'Add Items to Cart'}
+            {cartItems.length > 0 && fulfillmentMethod === 'delivery' && !hasAddress && 'Add Delivery Address'}
+            {hasAddress && cartItems.length > 0 && fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress && 'Add Location Pin'}
           </button>
         </div>
       </aside>

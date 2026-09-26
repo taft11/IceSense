@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, Check, CircleAlert, Trash2 } from 'lucide-react';
 
 const PENDING_APPROVAL_NOTIFICATION_THRESHOLD = 5;
 const UNASSIGNED_DELIVERY_NOTIFICATION_THRESHOLD = 3;
+const READ_NOTIFICATION_STORAGE_KEY = 'icesense-admin-read-notifications-v1';
 
 const formatSensorValue = (value, fallback) => {
   if (value === undefined || value === null || value === '' || value === 'Loading...') return fallback;
@@ -45,6 +46,17 @@ const getStoredCriticalNotifications = () => {
   }
 };
 
+const getStoredReadNotificationIds = () => {
+  if (typeof window === 'undefined') return new Set();
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(READ_NOTIFICATION_STORAGE_KEY) || '[]');
+    return Array.isArray(saved) ? new Set(saved.filter((id) => typeof id === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
 const criticalNotificationsReducer = (current, action) => {
   if (action.type === 'delete') {
     return current.filter((notification) => notification.id !== action.notificationId);
@@ -78,7 +90,7 @@ export default function AdminNotificationBell({
   const [activeTab, setActiveTab] = useState('critical');
   const [criticalNotifications, dispatchCriticalNotifications] = useReducer(criticalNotificationsReducer, undefined, getStoredCriticalNotifications);
   const [dismissedSystemIds, setDismissedSystemIds] = useState(new Set());
-  const [readIds, setReadIds] = useState(new Set());
+  const [readIds, setReadIds] = useState(getStoredReadNotificationIds);
   const [now, setNow] = useState(() => Date.now());
   const bellRef = useRef(null);
 
@@ -130,6 +142,10 @@ export default function AdminNotificationBell({
     });
     window.localStorage.setItem('icesense-admin-critical-notifications-v1', JSON.stringify(serializableNotifications));
   }, [criticalNotifications]);
+
+  useEffect(() => {
+    window.localStorage.setItem(READ_NOTIFICATION_STORAGE_KEY, JSON.stringify([...readIds]));
+  }, [readIds]);
 
   const notifications = useMemo(() => ({
     critical: criticalNotifications,

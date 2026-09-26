@@ -17,8 +17,33 @@ import CustomerNotifications from './components/CustomerNotifications';
 import { getMissingProfileFields } from './utils/profileValidation';
 
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
+const DELIVERY_BASE_LOCATION = { latitude: 14.752078, longitude: 121.0780146 };
+const NEARBY_DELIVERY_RADIUS_KM = 10;
+const NEARBY_DELIVERY_FEE = 300;
+const FAR_DELIVERY_FEE = 500;
 
 const getCartStorageKey = (userId = null) => (userId ? `icesense-cart-v1-${userId}` : 'icesense-cart-v1-guest');
+
+const getDistanceInKilometers = (origin, destination) => {
+  const originLatitude = Number(origin?.latitude);
+  const originLongitude = Number(origin?.longitude);
+  const destinationLatitude = Number(destination?.latitude);
+  const destinationLongitude = Number(destination?.longitude);
+
+  if (![originLatitude, originLongitude, destinationLatitude, destinationLongitude].every(Number.isFinite)) {
+    return null;
+  }
+
+  const toRadians = (degrees) => degrees * (Math.PI / 180);
+  const latitudeDifference = toRadians(destinationLatitude - originLatitude);
+  const longitudeDifference = toRadians(destinationLongitude - originLongitude);
+  const haversine = Math.sin(latitudeDifference / 2) ** 2
+    + Math.cos(toRadians(originLatitude))
+    * Math.cos(toRadians(destinationLatitude))
+    * Math.sin(longitudeDifference / 2) ** 2;
+
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
 
 const PRODUCT_STOCK_PATHS = {
   'tube-5': ['tube_ice', '5kg_sacks'],
@@ -357,6 +382,23 @@ export default function CustomerPortal() {
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasSavedAddress = addresses.length > 0;
+  const defaultDeliveryAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+  const deliveryDistanceKm = fulfillmentMethod === 'delivery'
+    ? getDistanceInKilometers(DELIVERY_BASE_LOCATION, defaultDeliveryAddress)
+    : null;
+  const calculatedDeliveryFee = fulfillmentMethod === 'pickup'
+    ? 0
+    : deliveryDistanceKm == null
+      ? null
+      : deliveryDistanceKm <= NEARBY_DELIVERY_RADIUS_KM
+        ? NEARBY_DELIVERY_FEE
+        : FAR_DELIVERY_FEE;
+  const deliveryFee = isRescheduling
+    ? Number(reschedulingOrder?.deliveryFee || 0)
+    : calculatedDeliveryFee;
+  const orderTotal = isRescheduling
+    ? Number(reschedulingOrder?.total ?? cartSubtotal)
+    : cartSubtotal + (deliveryFee ?? 0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -800,6 +842,11 @@ export default function CustomerPortal() {
       return;
     }
 
+    if (!isRescheduling && fulfillmentMethod === 'delivery' && deliveryFee == null) {
+      redirectToAddressSetup('Please add a map pin to your default delivery address so we can calculate the delivery fee.');
+      return;
+    }
+
     if (!isRescheduling && !receiptFile) {
       setReceiptError('Please upload a GCash receipt screenshot before placing your order.');
       return;
@@ -813,9 +860,7 @@ export default function CustomerPortal() {
     const fullName = getFullName();
     const normalizedDeliveryDate = deliveryDate || toDateInputValue(earliestDeliveryDate);
     const normalizedDeliverySlot = DELIVERY_TIME_SLOTS.find((slot) => slot.id === deliverySlot)?.label || DELIVERY_TIME_SLOTS[0].label;
-    const defaultAddress = fulfillmentMethod === 'delivery'
-      ? addresses.find((address) => address.isDefault) || addresses[0] || null
-      : null;
+    const defaultAddress = fulfillmentMethod === 'delivery' ? defaultDeliveryAddress : null;
     const shippingAddress = defaultAddress
       ? `${defaultAddress.street || ''}, ${defaultAddress.city || ''}, ${defaultAddress.state || ''} ${defaultAddress.postalCode || ''}`.replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim()
       : 'Address not provided yet';
@@ -850,7 +895,11 @@ export default function CustomerPortal() {
           quantity: item.quantity,
           price: item.price,
         })),
-        total: cartSubtotal,
+        total: orderTotal,
+        deliveryFee: deliveryFee ?? 0,
+        deliveryDistanceKm: isRescheduling
+          ? reschedulingOrder?.deliveryDistanceKm ?? null
+          : deliveryDistanceKm,
         status: isRescheduling ? 'Reschedule Request' : 'Pending Payment Verification',
         paymentMethod,
         paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
@@ -949,6 +998,10 @@ export default function CustomerPortal() {
 
     if (fulfillmentMethod === 'delivery' && !hasSavedAddress) {
       redirectToAddressSetup();
+      return;
+    }
+    if (!isRescheduling && fulfillmentMethod === 'delivery' && deliveryFee == null) {
+      redirectToAddressSetup('Please add a map pin to your default delivery address so we can calculate the delivery fee.');
       return;
     }
     if (isRescheduling) {
@@ -1354,6 +1407,8 @@ export default function CustomerPortal() {
         }}
         cartItems={cartItems}
         cartSubtotal={cartSubtotal}
+        deliveryFee={deliveryFee}
+        orderTotal={orderTotal}
         cartItemCount={cartItemCount}
         orderStatus={orderStatus}
         onUpdateQuantity={updateCartItemQuantity}
@@ -1383,6 +1438,7 @@ export default function CustomerPortal() {
         onToggleDelivery={() => setIsDeliveryExpanded((prev) => !prev)}
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
         hasAddress={hasSavedAddress || fulfillmentMethod === 'pickup'}
+        hasPricedDeliveryAddress={deliveryFee != null}
         receiptFile={receiptFile}
         receiptReferenceNumber={receiptReferenceNumber}
         detectedReceiptReferenceNumber={detectedReceiptReferenceNumber}
