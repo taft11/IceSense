@@ -22,7 +22,9 @@ export default function Orders({
   setActiveOrderFilter,
   activeDateFilter,
   setActiveDateFilter,
+  verificationLoadingId,
   onApprovePayment,
+  onMarkRefundComplete,
   onOpenReceiptPreview,
   onOpenRejectModal,
 }) {
@@ -67,6 +69,10 @@ export default function Orders({
     setConfirmAction({ type: 'reject', order });
   };
 
+  const openRefundCompleteConfirm = (order) => {
+    setConfirmAction({ type: 'refund', order });
+  };
+
   const closeConfirmModal = () => {
     setConfirmAction(null);
   };
@@ -78,6 +84,8 @@ export default function Orders({
       onApprovePayment(confirmAction.order);
     } else if (confirmAction.type === 'reject') {
       onOpenRejectModal(confirmAction.order);
+    } else if (confirmAction.type === 'refund') {
+      onMarkRefundComplete(confirmAction.order);
     }
 
     closeConfirmModal();
@@ -86,6 +94,20 @@ export default function Orders({
   const getStatusBadge = (order) => {
     const normalizedStatus = (order.status || '').toLowerCase();
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
+    const stockReservationStatus = String(order.stockReservationStatus || '').toUpperCase();
+
+    if (order.refundStatus === 'REQUESTED') {
+      return { label: 'Refund Requested', className: 'bg-orange-100 text-orange-700' };
+    }
+    if (order.refundStatus === 'COMPLETED') {
+      return { label: 'Refund Complete', className: 'bg-slate-100 text-slate-700' };
+    }
+    if (stockReservationStatus === 'CUSTOMER_DECISION_REQUIRED') {
+      return { label: 'Refund Available', className: 'bg-amber-100 text-amber-800' };
+    }
+    if (stockReservationStatus === 'WAITING_FOR_STOCK') {
+      return { label: 'Refund Available', className: 'bg-amber-100 text-amber-800' };
+    }
 
     const deliveryDate = order?.deliveryDate ? new Date(`${order.deliveryDate}T00:00:00`) : null;
     const today = new Date();
@@ -186,12 +208,16 @@ export default function Orders({
 
   const isPendingVerification = (order) => {
     const paymentStatus = String(order?.paymentStatus || '').toLowerCase();
+    const stockReservationStatus = String(order?.stockReservationStatus || '').toUpperCase();
     const deliveryDate = order?.deliveryDate ? new Date(`${order.deliveryDate}T00:00:00`) : null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isPastOrder = deliveryDate && !Number.isNaN(deliveryDate.getTime()) && deliveryDate < today;
 
-    return !isPastOrder && (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending' || paymentStatus === 'awaiting_verification');
+    return !isPastOrder
+      && !['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK', 'REFUND_REQUESTED'].includes(stockReservationStatus)
+      && order?.refundStatus !== 'REQUESTED'
+      && (paymentStatus === 'pending_payment_verification' || paymentStatus === 'pending' || paymentStatus === 'awaiting_verification');
   };
 
   const getReceiptPreviewUrl = (order) => {
@@ -480,7 +506,16 @@ export default function Orders({
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {isPendingVerification(order) ? (
+                            {order.refundStatus === 'REQUESTED' ? (
+                              <button
+                                type="button"
+                                onClick={() => openRefundCompleteConfirm(order)}
+                                disabled={verificationLoadingId === order.id}
+                                className="h-9 whitespace-nowrap rounded-full bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                              >
+                                {verificationLoadingId === order.id ? 'Updating...' : 'Mark Refunded'}
+                              </button>
+                            ) : isPendingVerification(order) ? (
                               <div className="grid min-w-[270px] grid-cols-3 gap-2">
                                 <button
                                   type="button"
@@ -631,12 +666,14 @@ export default function Orders({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-gray-900">
-              {confirmAction.type === 'approve' ? 'Approve payment?' : 'Reject payment?'}
+              {confirmAction.type === 'approve' ? 'Approve payment?' : confirmAction.type === 'refund' ? 'Mark refund complete?' : 'Reject payment?'}
             </h3>
             <p className="mt-2 text-sm text-gray-600">
               {confirmAction.type === 'approve'
                 ? 'Are you sure you want to approve this payment?'
-                : 'Are you sure you want to reject this payment?'}
+                : confirmAction.type === 'refund'
+                  ? 'Confirm that you have sent the manual GCash refund before marking this request complete.'
+                  : 'Are you sure you want to reject this payment?'}
             </p>
             <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
@@ -647,9 +684,9 @@ export default function Orders({
               </button>
               <button
                 onClick={handleConfirmAction}
-                className={`rounded-2xl px-4 py-3 text-sm font-semibold text-white transition ${confirmAction.type === 'approve' ? 'bg-[#4091c9] hover:bg-[#2d75aa]' : 'bg-[#4091c9] hover:bg-[#2d75aa]'}`}
+                className="rounded-2xl bg-[#4091c9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2d75aa]"
               >
-                {confirmAction.type === 'approve' ? 'Yes, approve' : 'Yes, reject'}
+                {confirmAction.type === 'approve' ? 'Yes, approve' : confirmAction.type === 'refund' ? 'Yes, refunded' : 'Yes, reject'}
               </button>
             </div>
           </div>

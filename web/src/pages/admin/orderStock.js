@@ -12,6 +12,7 @@ const PRODUCT_STOCK_PATHS = {
 
 export const restoreCancelledOrderStock = async (order) => {
   if (!order?.id) return;
+  if (order.stockReservationStatus && order.stockReservationStatus !== 'RESERVED') return;
 
   const quantityByPath = new Map();
   (order.items || []).forEach((item) => {
@@ -45,6 +46,9 @@ export const restoreCancelledOrderStock = async (order) => {
       ...(nextInventory.stockRestorations || {}),
       [order.id]: true,
     };
+    const reservations = { ...(nextInventory.stockReservations || {}) };
+    delete reservations[order.id];
+    nextInventory.stockReservations = reservations;
     return nextInventory;
   });
 

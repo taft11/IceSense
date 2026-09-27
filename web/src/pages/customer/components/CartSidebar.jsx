@@ -44,6 +44,9 @@ export default function CartSidebar({
   onReceiptFileChange,
   receiptError,
   inventoryNotice,
+  stockConflictOrder,
+  stockActionLoadingId,
+  onRequestStockRefund,
 }) {
   return (
     <div className={`fixed inset-0 z-40 transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -56,6 +59,47 @@ export default function CartSidebar({
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
+        {stockConflictOrder && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4">
+            <section className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" role="alertdialog" aria-labelledby="stockConflictTitle">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 id="stockConflictTitle" className="text-lg font-bold text-gray-900">Stock changed during checkout</h2>
+                  <p className="mt-1 text-sm leading-5 text-gray-600">Your full order and uploaded payment receipt are saved, but the requested stock is unavailable.</p>
+                </div>
+              </div>
+
+              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm">
+                <div className="space-y-1 text-gray-700">
+                  {stockConflictOrder.items.map((item) => (
+                    <p key={item.productId}>{item.name} × {item.quantity}</p>
+                  ))}
+                </div>
+                <p className="mt-2 border-t border-gray-200 pt-2 font-semibold text-gray-900">
+                  Paid order total: ₱{Number(stockConflictOrder.total || 0).toFixed(2)}
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => onRequestStockRefund(stockConflictOrder.id)}
+                  disabled={stockActionLoadingId === stockConflictOrder.id}
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-wait disabled:opacity-60"
+                >
+                  Request refund
+                </button>
+              </div>
+
+              <p className="mt-4 text-xs leading-5 text-gray-500">
+                Refunds are reviewed and processed manually. Facebook page: <span className="font-semibold text-gray-700">Bella Erin Tube Ice</span>. Support phone number will be added when available.
+              </p>
+            </section>
+          </div>
+        )}
         {isCheckoutConfirmOpen && !isRescheduling && (
           <div className="absolute inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 p-3 sm:p-5">
             <div className="my-auto max-h-full w-full max-w-md overflow-y-auto rounded-[1.5rem] bg-white p-4 shadow-2xl sm:p-5">

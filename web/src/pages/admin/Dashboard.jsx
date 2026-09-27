@@ -129,8 +129,14 @@ export default function AdminDashboard() {
       normalizedStatus === 'cancelled'
       || normalizedStatus === 'rejected'
       || paymentStatus === 'rejected'
+      || order.refundStatus === 'COMPLETED'
+      || paymentStatus === 'refunded'
     ) {
       return 'cancelled';
+    }
+
+    if (['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK'].includes(String(order.stockReservationStatus || '').toUpperCase())) {
+      return 'pending_payment';
     }
 
     if (
@@ -479,6 +485,7 @@ export default function AdminDashboard() {
 
   const handleApprovePayment = async (order) => {
     if (!order?.id) return;
+    if (order.stockReservationStatus && order.stockReservationStatus !== 'RESERVED') return;
     try {
       setVerificationLoadingId(order.id);
       await updateDoc(doc(db, 'orders', order.id), {
@@ -492,6 +499,27 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Unable to approve payment', error);
       setOrdersError('Unable to approve payment right now.');
+    } finally {
+      setVerificationLoadingId(null);
+    }
+  };
+
+  const handleMarkRefundComplete = async (order) => {
+    if (!order?.id || order.refundStatus !== 'REQUESTED') return;
+
+    try {
+      setVerificationLoadingId(order.id);
+      await updateDoc(doc(db, 'orders', order.id), {
+        refundStatus: 'COMPLETED',
+        refundCompletedAt: serverTimestamp(),
+        refundCompletedBy: adminUid || null,
+        paymentStatus: 'REFUNDED',
+        status: 'Refund Complete',
+        stockReservationStatus: 'REFUND_COMPLETED',
+      });
+    } catch (error) {
+      console.error('Unable to mark refund complete', error);
+      setOrdersError('Unable to update the refund status right now.');
     } finally {
       setVerificationLoadingId(null);
     }
@@ -591,6 +619,7 @@ export default function AdminDashboard() {
             pendingOrders={pendingOrders}
             unassignedDeliveries={unassignedDeliveries}
             processingPickupOrders={processingPickupOrders}
+            refundOrders={allOrders.filter((order) => Boolean(order.refundStatus))}
           />
         </div>
 
@@ -666,6 +695,7 @@ export default function AdminDashboard() {
                   formatDate={formatDate}
                   verificationLoadingId={verificationLoadingId}
                   onApprovePayment={handleApprovePayment}
+                  onMarkRefundComplete={handleMarkRefundComplete}
                   onOpenReceiptPreview={openReceiptPreview}
                   onOpenRejectModal={openRejectModal}
                 />

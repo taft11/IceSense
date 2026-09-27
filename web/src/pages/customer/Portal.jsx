@@ -1,8 +1,8 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { get, onValue, ref, runTransaction } from 'firebase/database';
+import { addDoc, collection, doc, getDoc, onSnapshot, query, runTransaction as runFirestoreTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { onValue, ref, runTransaction } from 'firebase/database';
 import { ref as storageRef, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { createWorker } from 'tesseract.js';
 import { auth, database, db, storage } from '../../services/firebase';
@@ -319,6 +319,8 @@ export default function CustomerPortal() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
+  const [stockConflictOrder, setStockConflictOrder] = useState(null);
+  const [stockActionLoadingId, setStockActionLoadingId] = useState(null);
   const [requestedOrderFilter, setRequestedOrderFilter] = useState('active');
   const [orderStatus, setOrderStatus] = useState('idle');
   const [cartAddSuccess, setCartAddSuccess] = useState(false);
@@ -944,11 +946,12 @@ export default function CustomerPortal() {
 
     let stockReservations = [];
     let orderCreated = false;
+    let receiptUrl = reschedulingOrder?.receiptUrl || '';
+    let orderPayload = null;
 
     try {
       const ordersRef = collection(db, 'orders');
 
-      let receiptUrl = reschedulingOrder?.receiptUrl || '';
       if (!isRescheduling) {
         const receiptRef = storageRef(storage, `payment_receipts/${currentUser.uid}/${Date.now()}-${receiptFile.name}`);
         const optimizedReceipt = await optimizeReceiptImage(receiptFile);
@@ -959,7 +962,7 @@ export default function CustomerPortal() {
         receiptUrl = await getDownloadURL(receiptRef);
       }
 
-      const orderPayload = {
+      orderPayload = {
         userId: currentUser.uid,
         items: cartItems.map((item) => ({
           productId: item.productId,
@@ -975,6 +978,7 @@ export default function CustomerPortal() {
         status: isRescheduling ? 'Reschedule Request' : 'Pending Payment Verification',
         paymentMethod,
         paymentStatus: 'PENDING_PAYMENT_VERIFICATION',
+        stockReservationStatus: 'RESERVED',
         fulfillmentMethod,
         readyForDelivery: false,
         receiptUrl,
@@ -1050,38 +1054,87 @@ export default function CustomerPortal() {
 
       console.error('Order submission failed', error);
       if (error.message === 'INSUFFICIENT_STOCK') {
-        try {
-          const inventorySnapshot = await get(ref(database, 'inventory/scale_1'));
-          const currentStocks = getProductStocks(inventorySnapshot.val() || {});
-          const { adjustedItems, changes } = reconcileCartWithStocks(cartItems, currentStocks);
-          setStocks(currentStocks);
+        if (!isRescheduling && orderPayload) {
+          try {
+            const conflictOrderRef = await addDoc(collection(db, 'orders'), {
+              ...orderPayload,
+              status: 'Stock Decision Required',
+              stockReservationStatus: 'CUSTOMER_DECISION_REQUIRED',
+              stockConflictDetectedAt: serverTimestamp(),
+            });
+            updateDoc(conflictOrderRef, { orderId: conflictOrderRef.id }).catch((updateError) => {
+              console.error('Unable to add the order reference', updateError);
+            });
 
-          if (changes.length > 0) {
-            const changedProducts = changes.map(({ name, quantity }) => `${quantity} ${name}`).join(', ');
-            const message = `Stock changed before checkout completed. Your cart is now limited to ${changedProducts}. Review the updated total and upload a new payment receipt.`;
-            setCartItems(adjustedItems);
+            setStockConflictOrder({
+              id: conflictOrderRef.id,
+              items: orderPayload.items,
+              total: orderPayload.total,
+            });
+            setCartItems([]);
             setReceiptFile(null);
             setReceiptReferenceNumber('');
             setDetectedReceiptReferenceNumber('');
             setIsReceiptReferenceConfirmed(false);
             setIsReceiptReferenceEditing(false);
-            setInventoryNotice(message);
-            setReceiptError('');
+            setIsCheckoutConfirmOpen(false);
             setIsCartOpen(true);
-            setIsCheckoutConfirmOpen(true);
-            setToast({ visible: true, message });
+            setReceiptError('');
+            setToast({
+              visible: true,
+              message: 'Your order and payment receipt are saved. Submit a refund request from the order details to notify the admin.',
+            });
             setOrderStatus('idle');
             return;
+          } catch (saveError) {
+            console.error('Unable to save the stock-conflict order', saveError);
           }
-        } catch (inventoryError) {
-          console.error('Failed to refresh inventory after checkout conflict', inventoryError);
         }
 
-        setReceiptError('Some items are no longer available in the requested quantity. Please review your cart and try again.');
+        setReceiptError('Stock changed during checkout and we could not save your order choice. Please contact support before paying again.');
       } else {
         setReceiptError('Your order could not be saved. Please try again.');
       }
       setOrderStatus('idle');
+    }
+  };
+
+  const handleRequestStockRefund = async (orderId) => {
+    if (!orderId) return;
+    setStockActionLoadingId(orderId);
+
+    try {
+      const orderRef = doc(db, 'orders', orderId);
+      const accepted = await runFirestoreTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(orderRef);
+        const order = snapshot.data();
+        if (!snapshot.exists() || order?.userId !== auth.currentUser?.uid) return false;
+        if (!['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK'].includes(order.stockReservationStatus)) return false;
+
+        transaction.update(orderRef, {
+          status: 'Refund Requested',
+          paymentStatus: 'REFUND_REQUESTED',
+          refundStatus: 'REQUESTED',
+          refundRequestedAt: serverTimestamp(),
+          stockReservationStatus: 'REFUND_REQUESTED',
+          stockChoice: 'REQUEST_REFUND',
+          stockChoiceAt: serverTimestamp(),
+        });
+        return true;
+      });
+
+      if (!accepted) throw new Error('This order can no longer be refunded through the stock-conflict flow.');
+      setStockConflictOrder(null);
+      setIsCartOpen(false);
+      setToast({
+        visible: true,
+        message: 'Your refund request was sent to the admin for manual processing. Facebook: Bella Erin Tube Ice.',
+      });
+    } catch (error) {
+      console.error('Unable to submit the stock refund request', error);
+      setToast({ visible: true, message: error.message || 'Unable to submit your refund request. Please try again.' });
+    } finally {
+      setStockActionLoadingId(null);
     }
   };
 
@@ -1443,6 +1496,8 @@ export default function CustomerPortal() {
               ordersLoading={ordersLoading}
               ordersError={ordersError}
               onReorder={reorderFromOrder}
+              onRequestStockRefund={handleRequestStockRefund}
+              stockActionLoadingId={stockActionLoadingId}
               initialFilter={requestedOrderFilter}
             />
           ) : (
@@ -1558,6 +1613,9 @@ export default function CustomerPortal() {
         onReceiptFileChange={handleReceiptFileChange}
         receiptError={receiptError}
         inventoryNotice={inventoryNotice}
+        stockConflictOrder={stockConflictOrder}
+        stockActionLoadingId={stockActionLoadingId}
+        onRequestStockRefund={handleRequestStockRefund}
       />
 
       <PendingOrderConfirmationModal

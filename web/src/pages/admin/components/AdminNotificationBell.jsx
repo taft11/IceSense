@@ -44,7 +44,13 @@ const notificationIcons = {
   'system-processing-pickups': CircleAlert,
 };
 
-const getNotificationIcon = (id) => (id.startsWith('low-stock-') ? Package : notificationIcons[id]);
+const getNotificationIcon = (id) => (
+  id.startsWith('low-stock-')
+    ? Package
+    : id.startsWith('refund-request-')
+      ? CircleAlert
+      : notificationIcons[id]
+);
 const ACTIVE_NOTIFICATION_STORAGE_KEY = 'icesense-admin-active-alert-events-v1';
 const createNotificationEventId = () => {
   const randomId = globalThis.crypto?.randomUUID?.();
@@ -131,6 +137,7 @@ export default function AdminNotificationBell({
   pendingOrders = 0,
   unassignedDeliveries = 0,
   processingPickupOrders = 0,
+  refundOrders = [],
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('critical');
@@ -200,6 +207,21 @@ export default function AdminNotificationBell({
       });
 
     alerts.push(...inventoryAlerts);
+    alerts.push(...refundOrders.filter((order) => order.refundStatus).map((order) => {
+      const isRefundRequested = order.refundStatus === 'REQUESTED';
+      const orderNumber = order.orderId || order.id;
+      return {
+        id: `refund-request-${order.id}`,
+        category: 'system',
+        isCritical: isRefundRequested,
+        title: `Refund requested: Order ${String(orderNumber).slice(0, 8).toUpperCase()}`,
+        detail: `${order.customerName || 'Customer'} requested a manual refund of ₱${Number(order.total || 0).toFixed(2)}.`,
+        resolvedDetail: `Refund request status: ${String(order.refundStatus).toLowerCase()}.`,
+        timestamp: 'Refund request',
+        icon: CircleAlert,
+        urgent: isRefundRequested,
+      };
+    }));
     alerts.push(
       {
         id: 'system-pending-approvals',
@@ -250,7 +272,7 @@ export default function AdminNotificationBell({
       updates: transition.updates,
       newEvents: transition.newEvents,
     });
-  }, [iotData, now, pendingOrders, unassignedDeliveries, processingPickupOrders]);
+  }, [iotData, now, pendingOrders, unassignedDeliveries, processingPickupOrders, refundOrders]);
 
   useEffect(() => {
     const serializableNotifications = criticalNotifications.map((notification) => {

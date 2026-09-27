@@ -10,6 +10,9 @@ const STATUS_BADGE_STYLES = {
   'Out for Delivery': 'bg-indigo-100 text-indigo-800',
   Delivered: 'bg-emerald-100 text-emerald-800',
   Cancelled: 'bg-red-100 text-red-800',
+  'Refund Available': 'bg-amber-100 text-amber-800',
+  'Refund Requested': 'bg-orange-100 text-orange-800',
+  'Refund Complete': 'bg-slate-100 text-slate-800',
   Failed: 'bg-orange-100 text-orange-800',
   'Not Delivered': 'bg-orange-100 text-orange-800',
 };
@@ -59,15 +62,21 @@ const isPastDeliveryDate = (value) => {
 const isCancelledOrder = (order) => {
   const status = normalizeStatus(order.status);
   const paymentStatus = normalizeStatus(order.paymentStatus);
+  const refundStatus = String(order.refundStatus || '').toUpperCase();
 
   return ['cancelled', 'canceled', 'rejected'].includes(status)
-    || ['cancelled', 'canceled', 'rejected'].includes(paymentStatus);
+    || ['cancelled', 'canceled', 'rejected', 'refunded'].includes(paymentStatus)
+    || refundStatus === 'COMPLETED';
 };
 
 const isFailedOrder = (order) => {
   const status = normalizeStatus(order.status);
   const paymentStatus = normalizeStatus(order.paymentStatus);
   const deliveryStatus = normalizeStatus(order.deliveryStatus);
+  const stockReservationStatus = String(order.stockReservationStatus || '').toUpperCase();
+
+  if (isCancelledOrder(order) || order.refundStatus === 'REQUESTED') return false;
+  if (['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK', 'REFUND_REQUESTED'].includes(stockReservationStatus)) return false;
 
   if (
     ['failed', 'not delivered', 'undelivered'].includes(status)
@@ -90,6 +99,12 @@ const getDisplayStatus = (order) => {
   const status = normalizeStatus(order.status);
   const paymentStatus = normalizeStatus(order.paymentStatus);
   const deliveryStatus = normalizeStatus(order.deliveryStatus);
+  const stockReservationStatus = String(order.stockReservationStatus || '').toUpperCase();
+  const refundStatus = String(order.refundStatus || '').toUpperCase();
+
+  if (refundStatus === 'COMPLETED' || paymentStatus === 'refunded') return 'Refund Complete';
+  if (refundStatus === 'REQUESTED' || stockReservationStatus === 'REFUND_REQUESTED') return 'Refund Requested';
+  if (['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK'].includes(stockReservationStatus)) return 'Refund Available';
 
   if (
     ['cancelled', 'canceled', 'rejected'].includes(status)
@@ -142,7 +157,15 @@ const getItemImage = (item) => {
   return null;
 };
 
-export default function OrderHistoryView({ orders, ordersLoading, ordersError, onReorder, initialFilter = 'active' }) {
+export default function OrderHistoryView({
+  orders,
+  ordersLoading,
+  ordersError,
+  onReorder,
+  onRequestStockRefund,
+  stockActionLoadingId,
+  initialFilter = 'active',
+}) {
   const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -237,6 +260,12 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
               ? 'Pickup'
               : 'Delivery';
             const showInlineDetails = isOrderActive(order);
+            const stockReservationStatus = String(order.stockReservationStatus || '').toUpperCase();
+            const needsStockChoice = stockReservationStatus === 'CUSTOMER_DECISION_REQUIRED';
+            const canRequestStockRefund = ['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK'].includes(stockReservationStatus);
+            const isStockActionPending = stockActionLoadingId === order.id;
+            const canReorder = !['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK', 'REFUND_REQUESTED'].includes(stockReservationStatus)
+              && order.refundStatus !== 'REQUESTED';
 
             return (
               <div
@@ -280,7 +309,8 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                     </div>
                   </div>
 
-                  {(showInlineDetails || expandedOrderId === order.id) && (
+                  {(showInlineDetails || expandedOrderId === order.id)
+                    && !['CUSTOMER_DECISION_REQUIRED', 'WAITING_FOR_STOCK', 'REFUND_REQUESTED'].includes(stockReservationStatus) && (
                     <OrderProgress order={order} />
                   )}
 
@@ -330,6 +360,34 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                     )}
                   </div>
 
+                  {needsStockChoice && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm font-semibold text-amber-900">Stock is unavailable for this order</p>
+                      <p className="mt-1 text-sm leading-5 text-amber-800">Submit a refund request for admin review. Your order and payment receipt remain available in this history.</p>
+                      <div className="mt-3">
+                        <button type="button" onClick={() => onRequestStockRefund?.(order.id)} disabled={isStockActionPending} className="rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
+                          Request refund
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {canRequestStockRefund && !needsStockChoice && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="text-sm text-amber-900">This order is not being fulfilled. You can submit a manual refund request.</p>
+                      <button type="button" onClick={() => onRequestStockRefund?.(order.id)} disabled={isStockActionPending} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">
+                        Request refund
+                      </button>
+                    </div>
+                  )}
+
+                  {order.refundStatus === 'REQUESTED' && (
+                    <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+                      <p className="font-semibold">Refund request sent for manual processing.</p>
+                      <p className="mt-1">Facebook page: <span className="font-semibold">Bella Erin Tube Ice</span>. Support phone number will be added when available.</p>
+                    </div>
+                  )}
+
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2">
                       {showInlineDetails ? (
@@ -349,13 +407,13 @@ export default function OrderHistoryView({ orders, ordersLoading, ordersError, o
                         </button>
                       )}
                     </div>
-                      <button
-                      type="button"
+                      {canReorder && <button
+                        type="button"
                         onClick={() => onReorder?.(order, isFailedOrder(order))}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#4091c9]"
-                    >
-                      {isFailedOrder(order) ? 'Choose New Date' : 'Reorder'}
-                    </button>
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#4091c9] hover:text-[#2d75aa]"
+                      >
+                        {isFailedOrder(order) ? 'Choose New Date' : 'Reorder'}
+                      </button>}
                   </div>
                 </div>
 
