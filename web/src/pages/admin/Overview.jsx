@@ -45,10 +45,9 @@ export default function Overview({
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   // Water tank calibration for 33 cm jug demo setup
-  // Empty at 58 cm sensor distance, full at 25 cm sensor distance
+  // Sensor range: 33 cm is empty, while readings in the 20 cm blindspot are full
   const TANK_TOTAL_HEIGHT = 33; // cm
-  const SENSOR_EMPTY_DISTANCE = 58; // cm
-  const SENSOR_FULL_DISTANCE = 25; // cm
+  const SENSOR_BLINDSPOT_DISTANCE = 20; // cm
   const MAX_MEASURABLE_DEPTH = TANK_TOTAL_HEIGHT; // 33 cm full tank depth
 
   // Raw distance reading from top of tank to water surface (cm)
@@ -57,20 +56,13 @@ export default function Overview({
   // Compute water depth (h) and percentage (P)
   let waterDepth = null;
   let waterPercent = null;
-  let overflow = false;
 
   if (rawDistance !== null && !Number.isNaN(rawDistance)) {
-    if (rawDistance <= SENSOR_FULL_DISTANCE) {
-      waterDepth = MAX_MEASURABLE_DEPTH;
-      waterPercent = 100;
-      overflow = true;
-    } else if (rawDistance >= SENSOR_EMPTY_DISTANCE) {
-      waterDepth = 0;
-      waterPercent = 0;
-    } else {
-      waterDepth = Math.max(0, Math.min(SENSOR_EMPTY_DISTANCE - rawDistance, MAX_MEASURABLE_DEPTH));
-      waterPercent = Math.max(0, Math.min((waterDepth / MAX_MEASURABLE_DEPTH) * 100, 100));
-    }
+    waterDepth = Math.max(
+      0,
+      Math.min(MAX_MEASURABLE_DEPTH, MAX_MEASURABLE_DEPTH * ((TANK_TOTAL_HEIGHT - rawDistance) / (TANK_TOTAL_HEIGHT - SENSOR_BLINDSPOT_DISTANCE)))
+    );
+    waterPercent = Math.max(0, Math.min((waterDepth / MAX_MEASURABLE_DEPTH) * 100, 100));
   }
 
   const chartData = environmentHistory
@@ -155,7 +147,7 @@ export default function Overview({
           <div className="mb-4 flex items-start justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Water Tank Level</h3>
             <span className="rounded-full border border-sky-200/60 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
-              {waterPercent !== null ? `${Math.round(waterPercent)}% Full` : 'N/A'}{overflow ? ' • OVERFLOW' : ''}
+              {waterPercent !== null ? `${Math.round(waterPercent)}% Full` : 'N/A'}
             </span>
           </div>
           <div>

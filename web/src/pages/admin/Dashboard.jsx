@@ -24,14 +24,13 @@ import AdminNotificationBell from './components/AdminNotificationBell';
 
 const ENVIRONMENT_SAMPLE_INTERVAL_MS = 5 * 60 * 1000;
 const FREEZER_TOO_WARM_THRESHOLD = -15;
-const SENSOR_EMPTY_DISTANCE = 58;
-const SENSOR_FULL_DISTANCE = 25;
+const TANK_TOTAL_HEIGHT = 33;
+const SENSOR_BLINDSPOT_DISTANCE = 20;
 
 const getWaterPercent = (distance) => {
   if (!Number.isFinite(distance)) return null;
-  if (distance <= SENSOR_FULL_DISTANCE) return 100;
-  if (distance >= SENSOR_EMPTY_DISTANCE) return 0;
-  return Math.max(0, Math.min(((SENSOR_EMPTY_DISTANCE - distance) / (SENSOR_EMPTY_DISTANCE - SENSOR_FULL_DISTANCE)) * 100, 100));
+  const waterDepth = TANK_TOTAL_HEIGHT * ((TANK_TOTAL_HEIGHT - distance) / (TANK_TOTAL_HEIGHT - SENSOR_BLINDSPOT_DISTANCE));
+  return Math.max(0, Math.min((waterDepth / TANK_TOTAL_HEIGHT) * 100, 100));
 };
 
 export default function AdminDashboard() {

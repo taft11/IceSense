@@ -6,18 +6,17 @@ initializeApp();
 
 const firestore = getFirestore();
 
-const SENSOR_EMPTY_DISTANCE = 58;
-const SENSOR_FULL_DISTANCE = 25;
+const TANK_TOTAL_HEIGHT = 33;
+const SENSOR_BLINDSPOT_DISTANCE = 20;
 
 const getWaterPercent = (distance) => {
 	if (!Number.isFinite(distance)) return null;
-	if (distance <= SENSOR_FULL_DISTANCE) return 100;
-	if (distance >= SENSOR_EMPTY_DISTANCE) return 0;
+	const waterDepth = TANK_TOTAL_HEIGHT * ((TANK_TOTAL_HEIGHT - distance) / (TANK_TOTAL_HEIGHT - SENSOR_BLINDSPOT_DISTANCE));
 
 	return Math.max(
 		0,
 		Math.min(
-			((SENSOR_EMPTY_DISTANCE - distance) / (SENSOR_EMPTY_DISTANCE - SENSOR_FULL_DISTANCE)) * 100,
+			(waterDepth / TANK_TOTAL_HEIGHT) * 100,
 			100
 		)
 	);
