@@ -63,6 +63,7 @@ export default function AdminDashboard() {
   });
   const [allOrders, setAllOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersReady, setOrdersReady] = useState(false);
   const [ordersError, setOrdersError] = useState('');
   const [ordersPage, setOrdersPage] = useState(1);
   const [verificationLoadingId, setVerificationLoadingId] = useState(null);
@@ -385,6 +386,7 @@ export default function AdminDashboard() {
     let unsubscribeOrders = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setOrdersReady(false);
       if (!user) {
         setAllOrders([]);
         setOrdersLoading(false);
@@ -421,6 +423,7 @@ export default function AdminDashboard() {
       const ordersRef = collection(db, 'orders');
       unsubscribeOrders = onSnapshot(
         ordersRef,
+        { includeMetadataChanges: true },
         (snapshot) => {
           const parsedOrders = snapshot.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -434,6 +437,7 @@ export default function AdminDashboard() {
 
           setAllOrders(parsedOrders);
           setOrdersLoading(false);
+          if (!snapshot.metadata.fromCache) setOrdersReady(true);
           setOrdersError('');
         },
         (error) => {
@@ -616,6 +620,7 @@ export default function AdminDashboard() {
           <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Bella Erin<span className="text-[#4091c9]">.</span></h2>
           <AdminNotificationBell
             iotData={iotData}
+            ordersReady={ordersReady}
             pendingOrders={pendingOrders}
             unassignedDeliveries={unassignedDeliveries}
             processingPickupOrders={processingPickupOrders}

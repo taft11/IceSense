@@ -134,6 +134,7 @@ const criticalNotificationsReducer = (current, action) => {
 
 export default function AdminNotificationBell({
   iotData,
+  ordersReady = false,
   pendingOrders = 0,
   unassignedDeliveries = 0,
   processingPickupOrders = 0,
@@ -222,41 +223,43 @@ export default function AdminNotificationBell({
         urgent: isRefundRequested,
       };
     }));
-    alerts.push(
-      {
-        id: 'system-pending-approvals',
-        category: 'system',
-        isCritical: pendingOrders >= PENDING_APPROVAL_NOTIFICATION_THRESHOLD,
-        title: `${pendingOrders} orders awaiting approval`,
-        detail: 'There are too many payment-verification orders waiting for review.',
-        resolvedDetail: 'Pending approvals are back below the alert threshold.',
-        timestamp: 'Current workload',
-        icon: CircleAlert,
-        urgent: true,
-      },
-      {
-        id: 'system-unassigned-deliveries',
-        category: 'system',
-        isCritical: unassignedDeliveries >= UNASSIGNED_DELIVERY_NOTIFICATION_THRESHOLD,
-        title: `${unassignedDeliveries} deliveries need drivers`,
-        detail: 'Several approved delivery orders do not have a driver assigned.',
-        resolvedDetail: 'Unassigned deliveries are back below the alert threshold.',
-        timestamp: 'Current workload',
-        icon: AlertTriangle,
-        urgent: true,
-      },
-      {
-        id: 'system-processing-pickups',
-        category: 'system',
-        isCritical: processingPickupOrders >= 1,
-        title: `${processingPickupOrders} pickup order${processingPickupOrders === 1 ? '' : 's'} processing`,
-        detail: 'Pickup orders are still waiting to be prepared or marked ready for pickup.',
-        resolvedDetail: 'There are no pickup orders waiting to be prepared.',
-        timestamp: 'Current workload',
-        icon: CircleAlert,
-        urgent: true,
-      },
-    );
+    if (ordersReady) {
+      alerts.push(
+        {
+          id: 'system-pending-approvals',
+          category: 'system',
+          isCritical: pendingOrders >= PENDING_APPROVAL_NOTIFICATION_THRESHOLD,
+          title: `${pendingOrders} orders awaiting approval`,
+          detail: 'There are too many payment-verification orders waiting for review.',
+          resolvedDetail: 'Pending approvals are back below the alert threshold.',
+          timestamp: 'Current workload',
+          icon: CircleAlert,
+          urgent: true,
+        },
+        {
+          id: 'system-unassigned-deliveries',
+          category: 'system',
+          isCritical: unassignedDeliveries >= UNASSIGNED_DELIVERY_NOTIFICATION_THRESHOLD,
+          title: `${unassignedDeliveries} deliveries need drivers`,
+          detail: 'Several approved delivery orders do not have a driver assigned.',
+          resolvedDetail: 'Unassigned deliveries are back below the alert threshold.',
+          timestamp: 'Current workload',
+          icon: AlertTriangle,
+          urgent: true,
+        },
+        {
+          id: 'system-processing-pickups',
+          category: 'system',
+          isCritical: processingPickupOrders >= 1,
+          title: `${processingPickupOrders} pickup order${processingPickupOrders === 1 ? '' : 's'} processing`,
+          detail: 'Pickup orders are still waiting to be prepared or marked ready for pickup.',
+          resolvedDetail: 'There are no pickup orders waiting to be prepared.',
+          timestamp: 'Current workload',
+          icon: CircleAlert,
+          urgent: true,
+        },
+      );
+    }
 
     const transition = createAlertTransitionEvents({
       alerts,
@@ -272,7 +275,7 @@ export default function AdminNotificationBell({
       updates: transition.updates,
       newEvents: transition.newEvents,
     });
-  }, [iotData, now, pendingOrders, unassignedDeliveries, processingPickupOrders, refundOrders]);
+  }, [iotData, now, ordersReady, pendingOrders, unassignedDeliveries, processingPickupOrders, refundOrders]);
 
   useEffect(() => {
     const serializableNotifications = criticalNotifications.map((notification) => {
