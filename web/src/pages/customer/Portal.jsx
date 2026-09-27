@@ -19,6 +19,7 @@ import { getMissingProfileFields } from './utils/profileValidation';
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
 const DELIVERY_BASE_LOCATION = { latitude: 14.752078, longitude: 121.0780146 };
 const NEARBY_DELIVERY_RADIUS_KM = 10;
+const MAX_DELIVERY_DISTANCE_KM = 30;
 const NEARBY_DELIVERY_FEE = 300;
 const FAR_DELIVERY_FEE = 500;
 
@@ -412,6 +413,9 @@ export default function CustomerPortal() {
   const deliveryDistanceKm = fulfillmentMethod === 'delivery'
     ? getDistanceInKilometers(DELIVERY_BASE_LOCATION, defaultDeliveryAddress)
     : null;
+  const isDeliveryOutOfRange = fulfillmentMethod === 'delivery'
+    && deliveryDistanceKm != null
+    && deliveryDistanceKm > MAX_DELIVERY_DISTANCE_KM;
   const calculatedDeliveryFee = fulfillmentMethod === 'pickup'
     ? 0
     : deliveryDistanceKm == null
@@ -921,6 +925,11 @@ export default function CustomerPortal() {
       return;
     }
 
+    if (isDeliveryOutOfRange) {
+      setToast({ visible: true, message: 'Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.' });
+      return;
+    }
+
     if (!isRescheduling && !receiptFile) {
       setReceiptError('Please upload a GCash receipt screenshot before placing your order.');
       return;
@@ -1155,6 +1164,10 @@ export default function CustomerPortal() {
     }
     if (!isRescheduling && fulfillmentMethod === 'delivery' && deliveryFee == null) {
       redirectToAddressSetup('Please add a map pin to your default delivery address so we can calculate the delivery fee.');
+      return;
+    }
+    if (isDeliveryOutOfRange) {
+      setToast({ visible: true, message: 'Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.' });
       return;
     }
     if (isRescheduling) {
@@ -1594,6 +1607,7 @@ export default function CustomerPortal() {
         isCheckoutConfirmOpen={isCheckoutConfirmOpen}
         hasAddress={hasSavedAddress || fulfillmentMethod === 'pickup'}
         hasPricedDeliveryAddress={deliveryFee != null}
+        isDeliveryOutOfRange={isDeliveryOutOfRange}
         receiptFile={receiptFile}
         receiptReferenceNumber={receiptReferenceNumber}
         detectedReceiptReferenceNumber={detectedReceiptReferenceNumber}

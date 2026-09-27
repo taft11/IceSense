@@ -32,6 +32,7 @@ export default function CartSidebar({
   isCheckoutConfirmOpen,
   hasAddress,
   hasPricedDeliveryAddress,
+  isDeliveryOutOfRange,
   receiptFile,
   receiptReferenceNumber,
   detectedReceiptReferenceNumber,
@@ -513,22 +514,27 @@ export default function CartSidebar({
               Add a map pin to your default address to calculate the delivery fee.
             </div>
           )}
+          {isDeliveryOutOfRange && (
+            <div role="alert" className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.
+            </div>
+          )}
           <button
             type="button"
             onClick={onCheckout}
-            disabled={orderStatus !== 'idle' || cartItems.length === 0 || (fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress)}
+            disabled={orderStatus !== 'idle' || cartItems.length === 0 || (fulfillmentMethod === 'delivery' && (!hasPricedDeliveryAddress || isDeliveryOutOfRange))}
             className={`flex w-full items-center justify-center rounded-2xl p-4 text-lg font-bold transition ${
-              orderStatus === 'idle' && cartItems.length > 0 && (fulfillmentMethod === 'pickup' || hasPricedDeliveryAddress)
+              orderStatus === 'idle' && cartItems.length > 0 && (fulfillmentMethod === 'pickup' || (hasPricedDeliveryAddress && !isDeliveryOutOfRange))
                 ? 'bg-[#4091c9] text-white hover:bg-[#2d75aa]'
                 : ''
             } ${orderStatus === 'processing' ? 'cursor-not-allowed bg-[#7aa8d1] text-white' : ''} ${
               orderStatus === 'success' ? 'bg-green-500 text-white' : ''
-            } ${cartItems.length === 0 || (fulfillmentMethod === 'delivery' && !hasPricedDeliveryAddress) ? 'cursor-not-allowed bg-gray-200 text-gray-500' : ''}`}
+            } ${cartItems.length === 0 || (fulfillmentMethod === 'delivery' && (!hasPricedDeliveryAddress || isDeliveryOutOfRange)) ? 'cursor-not-allowed bg-gray-200 text-gray-500' : ''}`}
           >
             {orderStatus === 'idle' && cartItems.length > 0 && (
               <>
                 <ShoppingCart className="mr-2 h-5 w-5" />
-                {isRescheduling ? 'Confirm' : 'Check Out'}
+                {isRescheduling ? 'Confirm' : isDeliveryOutOfRange ? 'Outside Delivery Area' : 'Check Out'}
               </>
             )}
             {orderStatus === 'processing' && (
