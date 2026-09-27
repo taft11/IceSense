@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CalendarDays, Download, RefreshCw } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Download, RefreshCw } from 'lucide-react';
 import { getIdToken } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -7,6 +7,7 @@ import { auth, db } from '../../services/firebase';
 
 const API_URL = import.meta.env.VITE_REVENUE_REPORTS_API_URL || '/api/revenue-reports';
 const CURRENCY = 'PHP';
+const DAILY_PAGE_SIZE = 7;
 
 const toDateInputValue = (date) => {
   const year = date.getFullYear();
@@ -156,6 +157,7 @@ export default function RevenueReports({ userRole }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [dailyPage, setDailyPage] = useState(0);
 
   const fetchReport = async () => {
     if (userRole !== 'owner') return;
@@ -205,8 +207,14 @@ export default function RevenueReports({ userRole }) {
     };
   }, [userRole, dates]);
 
+  const updateDates = (update) => {
+    setDates(update);
+    setDailyPage(0);
+  };
+
   const updatePreset = (nextPreset) => {
     setPreset(nextPreset);
+    setDailyPage(0);
     if (nextPreset !== 'custom') setDates(getPresetDates(nextPreset));
   };
 
@@ -220,6 +228,12 @@ export default function RevenueReports({ userRole }) {
 
   const summary = report?.summary || {};
   const dailyRows = report?.daily || [];
+  const dailyPageCount = Math.ceil(dailyRows.length / DAILY_PAGE_SIZE);
+  const currentDailyPage = Math.min(dailyPage, Math.max(dailyPageCount - 1, 0));
+  const visibleDailyRows = dailyRows.slice(
+    currentDailyPage * DAILY_PAGE_SIZE,
+    (currentDailyPage + 1) * DAILY_PAGE_SIZE,
+  );
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -246,8 +260,8 @@ export default function RevenueReports({ userRole }) {
         </div>
         {preset === 'custom' && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
-            <label className="text-sm font-semibold text-slate-600">Start date<input type="date" value={dates.startDate} onChange={(event) => setDates((current) => ({ ...current, startDate: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-800" /></label>
-            <label className="text-sm font-semibold text-slate-600">End date<input type="date" value={dates.endDate} onChange={(event) => setDates((current) => ({ ...current, endDate: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-800" /></label>
+            <label className="text-sm font-semibold text-slate-600">Start date<input type="date" value={dates.startDate} onChange={(event) => updateDates((current) => ({ ...current, startDate: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-800" /></label>
+            <label className="text-sm font-semibold text-slate-600">End date<input type="date" value={dates.endDate} onChange={(event) => updateDates((current) => ({ ...current, endDate: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-800" /></label>
           </div>
         )}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm text-slate-500">
@@ -284,8 +298,16 @@ export default function RevenueReports({ userRole }) {
         <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 p-5"><h2 className="text-lg font-bold text-slate-900">Daily breakdown</h2><span className="text-sm text-slate-500">{dailyRows.length} days</span></div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm"><thead className="border-y border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Delivery Date</th><th className="px-5 py-3 font-semibold">Orders</th><th className="px-5 py-3 font-semibold">Gross Revenue</th><th className="px-5 py-3 font-semibold">Net Sales</th><th className="px-5 py-3 font-semibold">Kilograms</th><th className="px-5 py-3 font-semibold">AOV</th></tr></thead><tbody className="divide-y divide-slate-100">{dailyRows.map((row) => <tr key={row.date} className="text-slate-700"><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-900">{formatDateLabel(row.date)}</td><td className="px-5 py-3">{formatNumber(row.orders)}</td><td className="px-5 py-3">{formatCurrency(row.grossRevenue)}</td><td className="px-5 py-3 font-semibold">{formatCurrency(row.netSales)}</td><td className="px-5 py-3">{formatNumber(row.kgSold)}</td><td className="px-5 py-3">{formatCurrency(row.averageOrderValue)}</td></tr>)}</tbody></table>
+            <table className="min-w-full text-left text-sm"><thead className="border-y border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Delivery Date</th><th className="px-5 py-3 font-semibold">Orders</th><th className="px-5 py-3 font-semibold">Gross Revenue</th><th className="px-5 py-3 font-semibold">Net Sales</th><th className="px-5 py-3 font-semibold">Kilograms</th><th className="px-5 py-3 font-semibold">AOV</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleDailyRows.map((row) => <tr key={row.date} className="text-slate-700"><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-900">{formatDateLabel(row.date)}</td><td className="px-5 py-3">{formatNumber(row.orders)}</td><td className="px-5 py-3">{formatCurrency(row.grossRevenue)}</td><td className="px-5 py-3 font-semibold">{formatCurrency(row.netSales)}</td><td className="px-5 py-3">{formatNumber(row.kgSold)}</td><td className="px-5 py-3">{formatCurrency(row.averageOrderValue)}</td></tr>)}</tbody></table>
           </div>
+          {dailyPageCount > 1 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+            <span>Showing {currentDailyPage * DAILY_PAGE_SIZE + 1}-{Math.min((currentDailyPage + 1) * DAILY_PAGE_SIZE, dailyRows.length)} of {dailyRows.length} days</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setDailyPage(currentDailyPage - 1)} disabled={currentDailyPage === 0} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"><ChevronLeft className="h-4 w-4" /> Previous</button>
+              <span className="px-1">Page {currentDailyPage + 1} of {dailyPageCount}</span>
+              <button type="button" onClick={() => setDailyPage(currentDailyPage + 1)} disabled={currentDailyPage + 1 >= dailyPageCount} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Next <ChevronRight className="h-4 w-4" /></button>
+            </div>
+          </div>}
         </section>
       </>}
     </div>
