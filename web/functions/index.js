@@ -1,10 +1,12 @@
 const functions = require('firebase-functions');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
+const { Resend } = require('resend');
 
 initializeApp();
 
 const firestore = getFirestore();
+const resend = new Resend(functions.config().resend.apikey);
 
 const TANK_TOTAL_HEIGHT = 33;
 const SENSOR_BLINDSPOT_DISTANCE = 20;
@@ -189,4 +191,53 @@ exports.writeDailyAnalytics = functions
 		await firestore.collection('daily_analytics').doc(dateKey).set(dailyAnalytics);
 		console.log(`Stored daily analytics for ${dateKey}`);
 		return null;
+	});
+
+exports.sendOrderConfirmationEmail = functions
+	.region('asia-southeast1')
+	.firestore.document('orders/{orderId}')
+	.onUpdate(async (change, context) => {
+		const before = change.before.data() || {};
+		const after = change.after.data() || {};
+		const orderId = context.params.orderId;
+		const previousPaymentStatus = String(before.paymentStatus || '').toUpperCase();
+		const currentPaymentStatus = String(after.paymentStatus || '').toUpperCase();
+
+		if (previousPaymentStatus === currentPaymentStatus) {
+			return null;
+		}
+
+		if (currentPaymentStatus !== 'PAID') {
+			return null;
+		}
+
+		const customerEmail = after.customerEmail;
+		const customerName = after.customerName || 'Customer';
+		if (!customerEmail) {
+			console.log(`No customer email found for order ${orderId}`);
+			return null;
+		}
+
+		try {
+			const emailResponse = await resend.emails.send({
+				from: 'Bella Erin Tube Ice <orders@bellaerintubeice.com>',
+				to: [customerEmail],
+				subject: `Your order is confirmed - #${orderId}`,
+				html: `
+					<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+						<h2 style="color: #1f2937;">Thank you, ${customerName}!</h2>
+						<p>Your order has been confirmed and is now being processed.</p>
+						<p><strong>Order ID:</strong> ${orderId}</p>
+						<p><strong>Total:</strong> ₱${Number(after.total || 0).toFixed(2)}</p>
+						<p>We will send updates regarding your delivery schedule and status.</p>
+					</div>
+				`,
+			});
+
+			console.log(`Order confirmation email sent for ${orderId}:`, emailResponse);
+			return null;
+		} catch (error) {
+			console.error(`Failed to send order confirmation email for ${orderId}:`, error);
+			return null;
+		}
 	});
