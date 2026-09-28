@@ -715,8 +715,8 @@ export default function AdminDashboard() {
       </main>
 
       {receiptPreview?.url && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4 py-8">
-          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl lg:flex-row">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/80 px-3 py-4 lg:items-center lg:overflow-hidden lg:px-4 lg:py-8">
+          <div className="relative flex max-h-none w-full max-w-5xl flex-col overflow-visible rounded-3xl bg-white shadow-2xl lg:max-h-[92vh] lg:flex-row lg:overflow-hidden">
             <button
               type="button"
               onClick={closeReceiptPreview}
