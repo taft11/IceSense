@@ -110,18 +110,6 @@ export default function Inventory() {
   const logsPerPage = 5;
   const previousScaleInventoryRef = useRef(null);
   const previousScaleLogsRef = useRef(null);
-  const skipNextScaleInventorySyncRef = useRef(false);
-  const lastManualScaleUpdateRef = useRef({});
-
-  const isRecentManualScaleUpdate = (productId, previousStock, newStock) => {
-    const lastManualUpdate = lastManualScaleUpdateRef.current[productId];
-    if (!lastManualUpdate) return false;
-
-    const withinWindow = Date.now() - lastManualUpdate.timestamp < 15000;
-    if (!withinWindow) return false;
-
-    return previousStock === lastManualUpdate.previousStock && newStock === lastManualUpdate.newStock;
-  };
 
   useEffect(() => {
     let unsubscribeInventory = null;
@@ -310,87 +298,12 @@ export default function Inventory() {
   }, [firestoreInventory, products, scaleInventory]);
 
   useEffect(() => {
-    if (skipNextScaleInventorySyncRef.current) {
-      skipNextScaleInventorySyncRef.current = false;
-      previousScaleInventoryRef.current = scaleInventory || null;
-      return;
-    }
-
     if (!scaleInventory || !products.length) {
       previousScaleInventoryRef.current = scaleInventory || null;
       return;
     }
 
-    const previousScaleInventory = previousScaleInventoryRef.current;
     previousScaleInventoryRef.current = scaleInventory;
-
-    if (!previousScaleInventory) {
-      return;
-    }
-
-    const currentSections = {
-      tube: scaleInventory?.tube_ice || {},
-      crushed: scaleInventory?.crushed_ice || {},
-    };
-    const previousSections = {
-      tube: previousScaleInventory?.tube_ice || {},
-      crushed: previousScaleInventory?.crushed_ice || {},
-    };
-
-    const scaleEntries = products
-      .filter((product) => product.isMonitoredByScale)
-      .map((product) => {
-        const currentSection = currentSections[product.type] || {};
-        const previousSection = previousSections[product.type] || {};
-        const currentBreakdown = currentSection.sacks_breakdown || {};
-        const previousBreakdown = previousSection.sacks_breakdown || {};
-        const scaleKey = `${Number(product.weightKg || 0)}kg_sacks`;
-
-        const previousStock = Number(
-          previousBreakdown[scaleKey] ?? previousSection.total_sacks ?? previousSection.total_sacks_count ?? 0
-        );
-        const nextStock = Number(
-          currentBreakdown[scaleKey] ?? currentSection.total_sacks ?? currentSection.total_sacks_count ?? 0
-        );
-
-        if (isRecentManualScaleUpdate(product.productId, previousStock, nextStock)) {
-          return null;
-        }
-
-        return {
-          productId: product.productId,
-          previousStock,
-          newStock: nextStock,
-          changeQuantity: nextStock - previousStock,
-        };
-      })
-      .filter(Boolean)
-      .filter((entry) => entry.changeQuantity !== 0);
-
-    if (scaleEntries.length === 0) {
-      return;
-    }
-
-    const writeScaleLogs = async () => {
-      await Promise.all(
-        scaleEntries.map((entry) =>
-          addDoc(collection(db, 'stock_logs'), {
-            productId: entry.productId,
-            changeQuantity: entry.changeQuantity,
-            previousStock: entry.previousStock,
-            newStock: entry.newStock,
-            reason: 'scale_sync',
-            source: 'automatic_scale',
-            performedBy: 'ESP32_Scale_01',
-            timestamp: serverTimestamp(),
-          })
-        )
-      );
-    };
-
-    writeScaleLogs().catch((error) => {
-      console.error('Unable to log automatic scale changes', error);
-    });
   }, [products, scaleInventory]);
 
   useEffect(() => {
@@ -445,10 +358,6 @@ export default function Inventory() {
 
             const previousStock = Math.max(0, countFromRealtime - changeQuantity);
             const newStock = countFromRealtime;
-
-            if (isRecentManualScaleUpdate(product.productId, previousStock, newStock)) {
-              return null;
-            }
 
             return addDoc(collection(db, 'stock_logs'), {
               productId: product.productId,
@@ -509,13 +418,6 @@ export default function Inventory() {
       sacksBreakdown[sackKey] = nextStock;
       const totalSacks = Object.values(sacksBreakdown).reduce((sum, value) => sum + Number(value || 0), 0);
 
-      skipNextScaleInventorySyncRef.current = true;
-      lastManualScaleUpdateRef.current[selectedItem.id] = {
-        timestamp: Date.now(),
-        previousStock: currentStock,
-        newStock: nextStock,
-      };
-
       await update(ref(realtimeDb, `inventory/scale_1/${scaleSectionKey}`), {
         [`sacks_breakdown/${sackKey}`]: nextStock,
         total_sacks: totalSacks,
@@ -533,12 +435,6 @@ export default function Inventory() {
         timestamp: serverTimestamp(),
       });
     } else {
-      lastManualScaleUpdateRef.current[selectedItem.id] = {
-        timestamp: Date.now(),
-        previousStock: currentStock,
-        newStock: nextStock,
-      };
-
       await updateDoc(doc(db, 'inventory', selectedItem.id), {
         currentStock: nextStock,
         totalWeightKg: nextWeight,
