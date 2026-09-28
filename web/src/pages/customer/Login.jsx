@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
@@ -13,6 +13,34 @@ const PASSWORD_REQUIREMENTS = [
   { label: 'One number', test: (value) => /\d/.test(value) },
   { label: 'One special character', test: (value) => /[^A-Za-z0-9]/.test(value) },
 ];
+const SIGNUP_DRAFT_KEY = 'bella-erin-signup-draft';
+
+const loadSignupDraft = () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const saved = window.sessionStorage.getItem(SIGNUP_DRAFT_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error('Unable to load saved signup draft', error);
+    return null;
+  }
+};
+
+const saveSignupDraft = (draft) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(draft));
+  } catch (error) {
+    console.error('Unable to save signup draft', error);
+  }
+};
+
+const clearSignupDraft = () => {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
+};
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -23,6 +51,7 @@ export default function Login() {
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
@@ -30,7 +59,49 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const passwordRequirementsMet = PASSWORD_REQUIREMENTS.every(({ test }) => test(password));
+
+  useEffect(() => {
+    const savedDraft = loadSignupDraft();
+    if (savedDraft) {
+      setEmail(savedDraft.email || '');
+      setPassword(savedDraft.password || '');
+      setConfirmPassword(savedDraft.confirmPassword || '');
+      setFirstName(savedDraft.firstName || '');
+      setMiddleName(savedDraft.middleName || '');
+      setLastName(savedDraft.lastName || '');
+      setContactNumber(savedDraft.contactNumber || '');
+      setAgreeToTerms(Boolean(savedDraft.agreeToTerms));
+    }
+
+    if (location.state?.signupMode === true) {
+      setIsLogin(false);
+      setError('');
+    }
+
+    if (location.state?.termsAccepted === true) {
+      setAgreeToTerms(true);
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    if (!isLogin) {
+      saveSignupDraft({
+        email,
+        password,
+        confirmPassword,
+        firstName,
+        middleName,
+        lastName,
+        contactNumber,
+        agreeToTerms,
+      });
+      return;
+    }
+
+    clearSignupDraft();
+  }, [agreeToTerms, confirmPassword, contactNumber, email, firstName, isLogin, lastName, middleName, password]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +115,10 @@ export default function Login() {
         const role = String(profileSnapshot.data()?.role || '').toLowerCase();
         navigate(['driver', 'delivery', 'deliverer'].includes(role) ? '/driver' : '/portal');
       } else {
+        if (!agreeToTerms) {
+          throw new Error('Please agree to the Terms and Conditions before creating your account.');
+        }
+
         const sanitizedPhoneNumber = sanitizePhoneNumberInput(contactNumber);
         const { missing, invalid } = getMissingProfileFields({
           firstName,
@@ -72,6 +147,7 @@ export default function Login() {
           role: 'customer',
           createdAt: serverTimestamp(),
         }, { merge: true });
+        clearSignupDraft();
         navigate('/portal');
       }
     } catch (err) {
@@ -94,6 +170,7 @@ export default function Login() {
     setError('');
     setPassword('');
     setConfirmPassword('');
+    setAgreeToTerms(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setPasswordFocused(false);
@@ -101,6 +178,7 @@ export default function Login() {
     setMiddleName('');
     setLastName('');
     setContactNumber('');
+    clearSignupDraft();
   };
 
   return (
@@ -300,6 +378,32 @@ export default function Login() {
               </div>
             )}
 
+            {!isLogin && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start gap-3 text-sm text-slate-700">
+                  <input
+                    id="agreeToTerms"
+                    type="checkbox"
+                    checked={agreeToTerms}
+                    onChange={(e) => setAgreeToTerms(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-[#4091c9] focus:ring-[#4091c9]"
+                  />
+                  <label htmlFor="agreeToTerms" className="flex-1">
+                    <span>
+                      I agree to the{' '}
+                    </span>
+                    <Link
+                      to="/terms-and-conditions"
+                      className="font-semibold text-[#4091c9] underline hover:text-[#2d75aa]"
+                    >
+                      Terms and Conditions
+                    </Link>
+                    <span> and understand the delivery policy.</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {isLogin && (
               <div className="flex justify-end mt-2">
                 <a href="#" className="text-sm font-semibold text-[#4091c9] hover:text-[#2d75aa] transition-colors">
@@ -310,9 +414,9 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading || (!isLogin && !passwordRequirementsMet)}
+              disabled={loading || (!isLogin && !passwordRequirementsMet) || (!isLogin && !agreeToTerms)}
               className={`w-full text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex justify-center items-center mt-8
-                ${loading || (!isLogin && !passwordRequirementsMet) ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa] hover:-translate-y-0.5'}`}
+                ${loading || (!isLogin && !passwordRequirementsMet) || (!isLogin && !agreeToTerms) ? 'bg-[#7aa8d1] cursor-not-allowed' : 'bg-[#4091c9] hover:bg-[#2d75aa] hover:-translate-y-0.5'}`}
             >
               {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
