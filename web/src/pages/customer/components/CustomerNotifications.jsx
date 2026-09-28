@@ -7,9 +7,14 @@ const getStatusLabel = (order) => {
   const deliveryStatus = String(order?.deliveryStatus || '').trim().toLowerCase();
 
   if (
+    ['cancelled', 'canceled', 'rejected'].includes(status)
+    || ['cancelled', 'canceled', 'rejected', 'refunded'].includes(paymentStatus)
+  ) return 'Cancelled';
+
+  if (
     ['failed', 'not delivered', 'undelivered'].includes(status)
     || ['failed', 'not delivered', 'undelivered'].includes(deliveryStatus)
-    || ['failed', 'rejected'].includes(paymentStatus)
+    || paymentStatus === 'failed'
   ) return 'Failed';
 
   if (
@@ -18,7 +23,6 @@ const getStatusLabel = (order) => {
     || ['delivered', 'completed', 'done', 'finished', 'delivery completed'].includes(deliveryStatus)
   ) return 'Delivered';
 
-  if (['cancelled', 'rejected'].includes(status) || paymentStatus === 'rejected') return 'Cancelled';
   if (
     ['attempting', 'out for delivery', 'in transit', 'on the way'].includes(status)
     || ['attempting', 'out for delivery', 'in transit', 'on the way'].includes(deliveryStatus)
@@ -87,6 +91,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
       statusLabel,
       isDelivered: statusLabel === 'Delivered',
       isFailed: statusLabel === 'Failed',
+      isCancelled: statusLabel === 'Cancelled',
       isNewOrder: statusLabel === 'Pending Payment Verification',
       dateLabel: formatNotificationDate(order),
     };
@@ -116,7 +121,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
   const handleNotificationClick = (notification) => {
     markAsRead(notification.signature);
     setIsOpen(false);
-    onViewOrders(notification.isDelivered ? 'completed' : notification.isFailed ? 'failed' : 'active');
+    onViewOrders(notification.isDelivered ? 'completed' : notification.isFailed ? 'failed' : notification.isCancelled ? 'cancelled' : 'active');
   };
 
   return (
@@ -169,7 +174,7 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-slate-900">
-                        {notification.isDelivered ? 'Order delivered' : notification.isFailed ? 'Order failed' : notification.isNewOrder ? 'Order placed' : 'Order status updated'}
+                        {notification.isDelivered ? 'Order delivered' : notification.isFailed ? 'Order failed' : notification.isCancelled ? 'Order cancelled' : notification.isNewOrder ? 'Order placed' : 'Order status updated'}
                       </span>
                       {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
                     </span>
@@ -178,6 +183,8 @@ export default function CustomerNotifications({ orders, userId, onViewOrders }) 
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was delivered and moved to the Completed tab.`
                         : notification.isFailed
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} could not be completed. Please review the Failed orders tab.`
+                        : notification.isCancelled
+                        ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was cancelled. Please review the Cancelled tab.`
                         : notification.isNewOrder
                         ? `Your order #${notification.id.slice(0, 6).toUpperCase()} was submitted and is awaiting payment verification.`
                         : `Order #${notification.id.slice(0, 6).toUpperCase()} is ${notification.statusLabel}.`}
