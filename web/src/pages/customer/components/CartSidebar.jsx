@@ -516,7 +516,7 @@ export default function CartSidebar({
           )}
           {isDeliveryOutOfRange && (
             <div role="alert" className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.
+              Delivery is available only within 20 km of our plant. Choose pickup or update your delivery address.
             </div>
           )}
           <button

@@ -19,7 +19,7 @@ import { getMissingProfileFields } from './utils/profileValidation';
 const DELIVERY_STORAGE_KEY = 'icesense-delivery-v1';
 const DELIVERY_BASE_LOCATION = { latitude: 14.752078, longitude: 121.0780146 };
 const NEARBY_DELIVERY_RADIUS_KM = 10;
-const MAX_DELIVERY_DISTANCE_KM = 30;
+const MAX_DELIVERY_DISTANCE_KM = 20;
 const NEARBY_DELIVERY_FEE = 300;
 const FAR_DELIVERY_FEE = 500;
 
@@ -926,7 +926,7 @@ export default function CustomerPortal() {
     }
 
     if (isDeliveryOutOfRange) {
-      setToast({ visible: true, message: 'Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.' });
+      setToast({ visible: true, message: 'Delivery is available only within 20 km of our plant. Choose pickup or update your delivery address.' });
       return;
     }
 
@@ -1167,7 +1167,7 @@ export default function CustomerPortal() {
       return;
     }
     if (isDeliveryOutOfRange) {
-      setToast({ visible: true, message: 'Delivery is available only within 30 km of our plant. Choose pickup or update your delivery address.' });
+      setToast({ visible: true, message: 'Delivery is available only within 20 km of our plant. Choose pickup or update your delivery address.' });
       return;
     }
     if (isRescheduling) {
